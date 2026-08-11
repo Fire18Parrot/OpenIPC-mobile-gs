@@ -116,13 +116,18 @@ arriving.
 
 ## Status
 
-Test-verified here: the portable engine — wfb receive path, adaptive-link
-scoring and wire format, RTP depacketising, MSP decoding, MAVLink framing and
-endpoint routing. 213 checks across 5 suites.
+**Test-verified.** The portable engine: wfb receive path, adaptive-link scoring
+and wire format, RTP depacketising, MSP decoding, MAVLink framing and endpoint
+routing. 213 checks across 5 suites, green locally and in CI.
 
-Compile-verified by CI only: the Android layer — JNI, the devourer and libusb
-integration, Compose UI, MediaCodec and the DVR. On-air behaviour needs real
-hardware; reports from a field test are welcome.
+**Build-verified.** The debug APK builds in CI for `arm64-v8a` and
+`armeabi-v7a`, with devourer, wfb-ng, libusb and libsodium all compiled from
+source. Grab it from the artifacts of the latest `android` workflow run.
+
+**Not yet verified.** Nothing has been on the air. Runtime behaviour — whether
+an adapter enumerates and claims, whether the chip brings up, whether video
+actually decodes end to end — needs hardware. Reports from a field test are
+very welcome, and are the next thing this needs.
 
 ## Licence
 
