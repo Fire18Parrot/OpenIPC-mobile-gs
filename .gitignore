@@ -1,0 +1,20 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+.cxx/
+captures/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# CMake host builds
+build-host/
+cmake-build-*/
+
+# Keys must never be committed: gs.key pairs with an air unit's drone.key.
+*.key

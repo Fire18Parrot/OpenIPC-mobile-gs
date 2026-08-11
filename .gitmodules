@@ -1,0 +1,8 @@
+[submodule "third_party/wfb-ng"]
+	path = third_party/wfb-ng
+	url = https://github.com/svpcom/wfb-ng
+	branch = master
+[submodule "third_party/devourer"]
+	path = third_party/devourer
+	url = https://github.com/openipc/devourer
+	branch = master
