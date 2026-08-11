@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenIPC Mobile GS</string>
+    <string name="channel_name">Ground station</string>
+    <string name="channel_description">Shown while the ground station is receiving</string>
+    <string name="notification_title">Ground station running</string>
+</resources>

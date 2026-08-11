@@ -1,0 +1,34 @@
+name: core tests
+
+# The protocol code is portable on purpose, so it can be tested on a plain
+# Linux runner with no Android SDK and no radio hardware. The interop suite
+# compiles wfb-ng's own transmitter and drives our receiver with it, which is
+# what pins the wire format.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ctest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libsodium-dev libpcap-dev
+
+      - name: Configure
+        run: cmake -S core -B build -G Ninja -DOPENIPC_TESTS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
