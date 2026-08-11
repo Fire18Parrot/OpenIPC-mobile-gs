@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package org.openipc.mobilegs.ui.gsmenu
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +27,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import org.openipc.mobilegs.settings.Settings
 
 /**
@@ -47,6 +52,34 @@ fun GsMenuScreen(
     onOpenDiagnostics: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
+    var importResult by remember { mutableStateOf<String?>(null) }
+
+    // Without a gs.key the wfb path cannot decrypt anything, and the SBC's
+    // answer - drop the file on the SD card, or scp it - is not available on a
+    // phone. So the menu has to be able to take one.
+    val importKey = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importResult = runCatching {
+            val target = File(context.filesDir, "gs.key")
+            context.contentResolver.openInputStream(uri).use { input ->
+                requireNotNull(input) { "could not read the file" }
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+            val size = target.length()
+            // wfb-ng's layout is exactly 64 bytes: the ground station's secret
+            // key followed by the air unit's public key.
+            if (size != 64L) {
+                target.delete()
+                "not a gs.key: expected 64 bytes, got $size"
+            } else {
+                "gs.key imported"
+            }
+        }.getOrElse { "import failed: ${it.message}" }
+    }
+
     var target by remember { mutableStateOf(GsMenu.targets.first().name) }
     var section by remember { mutableStateOf(GsMenu.targets.first().sections.first().name) }
 
@@ -120,6 +153,22 @@ fun GsMenuScreen(
                         fontSize = 9.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
+                    TextButton(onClick = { importKey.launch(arrayOf("*/*")) }) {
+                        Text("Import gs.key")
+                    }
+                    importResult?.let { message ->
+                        Text(
+                            text = message,
+                            color = if (message == "gs.key imported") {
+                                Color(0xFF4CAF50)
+                            } else {
+                                Color(0xFFFF5252)
+                            },
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 9.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
                     TextButton(onClick = onOpenDiagnostics) { Text("Diagnostics") }
                 }
 
