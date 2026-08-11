@@ -52,6 +52,7 @@ class GroundStationService : Service(), GroundStationListener {
     private var wakeLock: PowerManager.WakeLock? = null
     private var surface: Surface? = null
     private var pendingCodec: VideoCodec = VideoCodec.AUTO
+    private var isForeground = false
 
     private val _linkStats = MutableStateFlow(LinkStats())
     val linkStats: StateFlow<LinkStats> = _linkStats
@@ -76,8 +77,30 @@ class GroundStationService : Service(), GroundStationListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification("Starting"))
+        // Deliberately not promoted to the foreground here. From Android 14 a
+        // connectedDevice foreground service may only start while the app holds
+        // a qualifying prerequisite - USB device permission, or one of the
+        // network/Bluetooth permissions - and at this point we may hold none of
+        // them. Promotion happens in startGroundStation(), by which time the
+        // user has granted access to the adapter (or we are in APFPV mode,
+        // covered by the Wi-Fi state permissions).
         return START_STICKY
+    }
+
+    /**
+     * Promote to a foreground service so receiving survives the screen going
+     * off. Refusal is not fatal: the ground station keeps running as an ordinary
+     * bound service for as long as the activity is up, which is worth far more
+     * to the user than a crash.
+     */
+    private fun promoteToForeground(text: String) {
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(text))
+            isForeground = true
+        } catch (e: Exception) {
+            Log.w(TAG, "could not run in the foreground: ${e.message}")
+            isForeground = false
+        }
     }
 
     override fun onDestroy() {
@@ -128,7 +151,7 @@ class GroundStationService : Service(), GroundStationListener {
         if (settings.recordVideo) {
             recorder.start(this, settings.codec)
         }
-        updateNotification("Receiving")
+        promoteToForeground("Receiving")
         return true
     }
 
@@ -140,6 +163,11 @@ class GroundStationService : Service(), GroundStationListener {
         station = null
         _running.value = false
         releaseWakeLock()
+        if (isForeground) {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+            isForeground = false
+        }
         _status.value = "stopped"
     }
 
@@ -232,6 +260,7 @@ class GroundStationService : Service(), GroundStationListener {
     }
 
     private fun updateNotification(text: String) {
+        if (!isForeground) return
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .notify(NOTIFICATION_ID, buildNotification(text))
     }
@@ -253,13 +282,15 @@ class GroundStationService : Service(), GroundStationListener {
         private const val CHANNEL_ID = "ground_station"
         private const val NOTIFICATION_ID = 1
 
+        /**
+         * Start the service so it outlives the activity that bound it. Plain
+         * startService, not startForegroundService: the service promotes itself
+         * once the link is up and it holds a prerequisite the platform accepts.
+         * Called from a user-visible action, so background-start limits do not
+         * apply.
+         */
         fun start(context: Context) {
-            val intent = Intent(context, GroundStationService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startService(Intent(context, GroundStationService::class.java))
         }
     }
 }

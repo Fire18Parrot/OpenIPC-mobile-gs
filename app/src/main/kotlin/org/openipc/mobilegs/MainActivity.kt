@@ -66,7 +66,11 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        GroundStationService.start(this)
+        // Only bound here. The service is started - and promotes itself to the
+        // foreground - once there is actually a link to keep alive; starting a
+        // connectedDevice foreground service at launch, holding none of the
+        // prerequisites the platform requires from Android 14, is refused with
+        // an exception.
         bindService(
             Intent(this, GroundStationService::class.java),
             connection,
@@ -118,6 +122,7 @@ class MainActivity : ComponentActivity() {
         val active = service.value ?: return
 
         if (settings.source == SourceKind.UDP) {
+            GroundStationService.start(this)
             active.startGroundStation(settings, usbFd = -1, keyPath = gsKeyFile().absolutePath)
             return
         }
@@ -139,6 +144,9 @@ class MainActivity : ComponentActivity() {
                 active.onStatus("could not open the adapter")
                 return@requestPermission
             }
+            // Now that USB permission is granted the platform will accept a
+            // connectedDevice foreground service.
+            GroundStationService.start(this)
             active.startGroundStation(settings, fd, gsKeyFile().absolutePath)
         }
     }
