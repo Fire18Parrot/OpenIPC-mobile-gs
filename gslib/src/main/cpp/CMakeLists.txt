@@ -87,15 +87,22 @@ configure_file(
     @ONLY)
 
 add_library(sodium STATIC ${SODIUM_SOURCES})
+# All four of these are PUBLIC, not just for libsodium's own sources:
+#   include/                        <sodium.h>
+#   sodium_generated/               <sodium/version.h>, since version.h is
+#                                   generated rather than shipped
+#   include/sodium/                 the generated version.h does #include
+#                                   "export.h", which cannot resolve next to
+#                                   itself in the generated tree, so the real
+#                                   header directory must be on the path for
+#                                   every consumer of sodium.h - not only for
+#                                   libsodium's own translation units
+#   sodium_generated/sodium/        sodium/version.c includes "version.h"
+#                                   unqualified
 target_include_directories(sodium PUBLIC
     ${THIRD_PARTY}/libsodium/src/libsodium/include
     ${CMAKE_CURRENT_BINARY_DIR}/sodium_generated
-)
-target_include_directories(sodium PRIVATE
     ${THIRD_PARTY}/libsodium/src/libsodium/include/sodium
-    # sodium/version.c includes "version.h" unqualified, so the generated
-    # header's own directory has to be on the path as well as its parent
-    # (which serves the <sodium/version.h> form used elsewhere).
     ${CMAKE_CURRENT_BINARY_DIR}/sodium_generated/sodium
 )
 target_compile_definitions(sodium PUBLIC SODIUM_STATIC=1)

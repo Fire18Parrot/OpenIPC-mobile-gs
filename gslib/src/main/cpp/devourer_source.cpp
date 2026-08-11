@@ -10,13 +10,13 @@
 #include <memory>
 #include <thread>
 
-#include "devourer/src/IRtlDevice.h"
-#include "devourer/src/RxPacket.h"
-#include "devourer/src/SelectedChannel.h"
-#include "devourer/src/UsbOpen.h"
-#include "devourer/src/UsbDeviceLock.h"
-#include "devourer/src/WiFiDriver.h"
-#include "devourer/src/logger.h"
+#include "IRtlDevice.h"
+#include "RxPacket.h"
+#include "SelectedChannel.h"
+#include "UsbOpen.h"
+#include "UsbDeviceLock.h"
+#include "WiFiDriver.h"
+#include "logger.h"
 #include "packet_source.h"
 
 namespace openipc::gs {
