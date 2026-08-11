@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Realtek adapters devourer drives. Android wants these in decimal, not the
+  hex the datasheets and lsusb use, so each line carries the hex in a comment.
+  All are Realtek's vendor id 0x0bda = 3034.
+
+  Listing the products explicitly rather than the whole vendor means the app is
+  only offered when a supported adapter is plugged in, instead of for every
+  Realtek device the user owns.
+-->
+<resources>
+    <!-- Jaguar1 -->
+    <usb-device vendor-id="3034" product-id="34834" /> <!-- 0x8812 RTL8812AU -->
+    <usb-device vendor-id="3034" product-id="2065" />  <!-- 0x0811 RTL8811AU -->
+    <usb-device vendor-id="3034" product-id="43025" /> <!-- 0xa811 RTL8811AU -->
+    <usb-device vendor-id="3034" product-id="47121" /> <!-- 0xb811 RTL8811AU/8821AU -->
+    <usb-device vendor-id="3034" product-id="34835" /> <!-- 0x8813 RTL8814AU -->
+
+    <!-- Jaguar2 -->
+    <usb-device vendor-id="3034" product-id="47122" /> <!-- 0xb812 RTL8822BU -->
+    <usb-device vendor-id="3034" product-id="47148" /> <!-- 0xb82c RTL8822BU -->
+
+    <!-- Jaguar3 -->
+    <usb-device vendor-id="3034" product-id="51244" /> <!-- 0xc82c RTL8822CU -->
+    <usb-device vendor-id="3034" product-id="51246" /> <!-- 0xc82e RTL8822CU -->
+    <usb-device vendor-id="3034" product-id="51218" /> <!-- 0xc812 RTL8812CU -->
+    <usb-device vendor-id="3034" product-id="34842" /> <!-- 0x881a RTL8812EU -->
+    <usb-device vendor-id="3034" product-id="34843" /> <!-- 0x881b RTL8812EU -->
+    <usb-device vendor-id="3034" product-id="34844" /> <!-- 0x881c RTL8812EU -->
+    <usb-device vendor-id="3034" product-id="43034" /> <!-- 0xa81a RTL8812EU (LB-LINK) -->
+    <usb-device vendor-id="3034" product-id="59426" /> <!-- 0xe822 RTL8822EU -->
+    <usb-device vendor-id="3034" product-id="43050" /> <!-- 0xa82a RTL8822EU -->
+</resources>
