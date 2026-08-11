@@ -130,10 +130,10 @@ private fun FlightScreen(
         return
     }
     val stats by service.linkStats.collectAsState()
-    val telemetry by service.telemetry.collectAsState()
     val osd by service.osd.collectAsState()
     val status by service.status.collectAsState()
     val running by service.running.collectAsState()
+    val fps by service.videoFps.collectAsState()
 
     Box(Modifier.fillMaxSize()) {
         // A SurfaceView, not a TextureView: it hands MediaCodec a buffer queue
@@ -167,17 +167,37 @@ private fun FlightScreen(
             osd?.let { OsdOverlay(it, Modifier.fillMaxSize()) }
         }
 
-        LinkHud(
+        // Upstream places the metrics box at the top right (x = -270 in
+        // osd.json), so it goes there.
+        InGoggleOsd(
             stats = stats,
-            telemetry = telemetry,
-            status = status,
-            running = running,
+            codec = settings.codec.name.lowercase(),
+            fps = fps,
             recording = service.isRecording,
-            onOpenSettings = onOpenSettings,
-            onToggle = { if (running) onStop() else onStart() },
-            onToggleRecording = { service.toggleRecording(settings.codec) },
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
         )
+
+        // The SBC opens its menu with a goggle button; a phone needs something
+        // to touch, so these sit out of the way at the bottom.
+        Row(
+            modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { if (running) onStop() else onStart() }) {
+                Text(if (running) "Stop" else "Start")
+            }
+            TextButton(onClick = { service.toggleRecording(settings.codec) }) {
+                Text(if (service.isRecording) "Stop REC" else "Record")
+            }
+            TextButton(onClick = onOpenSettings) { Text("Menu") }
+            Text(
+                text = status,
+                color = Color(0xFF90A4AE),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+            )
+        }
     }
 }
 
@@ -187,80 +207,6 @@ private fun EmptyState(onOpenSettings: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Starting the ground station...", color = Color.White)
             TextButton(onClick = onOpenSettings) { Text("Settings") }
-        }
-    }
-}
-
-/**
- * The link readout. This is the equivalent of what wfb-cli shows on an SBC:
- * signal, FEC behaviour and whether the session is actually up.
- */
-@Composable
-private fun LinkHud(
-    stats: LinkStats,
-    telemetry: Telemetry,
-    status: String,
-    running: Boolean,
-    recording: Boolean,
-    onOpenSettings: () -> Unit,
-    onToggle: () -> Unit,
-    onToggleRecording: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(modifier) {
-        Column(Modifier.padding(10.dp)) {
-            val linkColour = when {
-                !stats.sessionEstablished -> Color(0xFFFF5252)
-                stats.packetsLost > 0 -> Color(0xFFFFC107)
-                else -> Color(0xFF4CAF50)
-            }
-            Text(
-                text = if (stats.sessionEstablished) "LINK UP" else "NO LINK",
-                color = linkColour,
-                fontFamily = FontFamily.Monospace,
-            )
-            Text(
-                text = "RSSI ${stats.bestRssi} dBm   SNR ${stats.bestSnr} dB   ant ${stats.antennas}",
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            Text(
-                text = "pkt ${stats.packetsAll}  lost ${stats.packetsLost}  fec ${stats.packetsRecovered}",
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            if (stats.fecK > 0) {
-                Text(
-                    text = "FEC ${stats.fecK}/${stats.fecN}",
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                )
-            }
-            if (telemetry.batteryVolts > 0f) {
-                Text(
-                    text = "BAT %.1fV  ALT %.0fm  SPD %.0fm/s  SAT %d".format(
-                        telemetry.batteryVolts,
-                        telemetry.relativeAltitudeM,
-                        telemetry.groundSpeedMs,
-                        telemetry.satellites,
-                    ),
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                )
-            }
-            Text(status, color = Color(0xFFB0BEC5), fontSize = 11.sp)
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onToggle) { Text(if (running) "Stop" else "Start") }
-                TextButton(onClick = onToggleRecording) {
-                    Text(if (recording) "Stop REC" else "Record")
-                }
-                TextButton(onClick = onOpenSettings) { Text("Settings") }
-            }
         }
     }
 }

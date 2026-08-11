@@ -70,6 +70,13 @@ class GroundStationService : Service(), GroundStationListener {
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running
 
+    /** Decoded frames per second, for the OSD's video widget. */
+    private val _videoFps = MutableStateFlow(0)
+    val videoFps: StateFlow<Int> = _videoFps
+
+    private var lastFrameCount = 0L
+    private var lastFpsAtMs = 0L
+
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onCreate() {
@@ -217,6 +224,19 @@ class GroundStationService : Service(), GroundStationListener {
     override fun onStats(stats: LinkStats, telemetry: Telemetry) {
         _linkStats.value = stats
         _telemetry.value = telemetry
+
+        // Stats arrive every 100 ms; frames are counted over a whole second so
+        // the number on screen is steady enough to read in flight.
+        val now = System.currentTimeMillis()
+        if (lastFpsAtMs == 0L) {
+            lastFpsAtMs = now
+            lastFrameCount = decoder.decodedFrames
+        } else if (now - lastFpsAtMs >= 1000) {
+            val frames = decoder.decodedFrames
+            _videoFps.value = (frames - lastFrameCount).toInt()
+            lastFrameCount = frames
+            lastFpsAtMs = now
+        }
     }
 
     override fun onStatus(message: String) {
