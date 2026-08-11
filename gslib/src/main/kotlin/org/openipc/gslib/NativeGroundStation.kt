@@ -242,21 +242,10 @@ class NativeGroundStation : AutoCloseable {
         private const val STAT_BATTERY_CURRENT = 13
         private const val STAT_BATTERY_REMAINING = 14
 
-        /**
-         * Generate a fresh wfb-ng key pair. `gs.key` stays on the phone;
-         * `drone.key` must be copied to the air unit's /etc.
-         */
-        @JvmStatic
-        external fun nativeGenerateKeyPair(gsPath: String, dronePath: String): Boolean
-
-        /** Returns an empty string when the key file is usable. */
-        @JvmStatic
-        external fun nativeValidateKey(path: String): String
-
+        /** Key handling lives on [NativeKeys]; kept here for convenience. */
         fun generateKeyPair(gsPath: String, dronePath: String): Boolean =
-            nativeGenerateKeyPair(gsPath, dronePath)
+            NativeKeys.generateKeyPair(gsPath, dronePath)
 
-        fun validateKey(path: String): String? =
-            nativeValidateKey(path).takeIf { it.isNotEmpty() }
+        fun validateKey(path: String): String? = NativeKeys.validateKey(path)
     }
 }

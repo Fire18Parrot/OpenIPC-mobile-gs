@@ -29,6 +29,17 @@ endforeach()
 # with upstream. On Android we never enumerate devices ourselves - the app is
 # handed a file descriptor by the system after the user grants USB permission -
 # but linux_usbfs is still the backend that drives it.
+
+# core.c includes version_describe.h, which libusb's autotools build generates
+# on the fly via build-aux/gen-describe.sh. It only ever defines one string, so
+# writing it here is simpler than shelling out to that script from the NDK
+# build - and keeps the result reproducible rather than varying with the git
+# state of the submodule.
+set(LIBUSB_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/libusb_generated")
+file(MAKE_DIRECTORY "${LIBUSB_GENERATED}")
+file(WRITE "${LIBUSB_GENERATED}/version_describe.h"
+     "#define LIBUSB_DESCRIBE \"OpenIPC-mobile-gs vendored build\"\n")
+
 add_library(usb-1.0 STATIC
     ${THIRD_PARTY}/libusb/libusb/core.c
     ${THIRD_PARTY}/libusb/libusb/descriptor.c
@@ -45,6 +56,7 @@ target_include_directories(usb-1.0 PUBLIC ${THIRD_PARTY}/libusb/libusb)
 target_include_directories(usb-1.0 PRIVATE
     ${THIRD_PARTY}/libusb/libusb/os
     ${THIRD_PARTY}/libusb/android
+    ${LIBUSB_GENERATED}
 )
 target_compile_options(usb-1.0 PRIVATE -fvisibility=hidden)
 target_link_libraries(usb-1.0 PRIVATE log)
@@ -75,12 +87,23 @@ configure_file(
     @ONLY)
 
 add_library(sodium STATIC ${SODIUM_SOURCES})
+# All four of these are PUBLIC, not just for libsodium's own sources:
+#   include/                        <sodium.h>
+#   sodium_generated/               <sodium/version.h>, since version.h is
+#                                   generated rather than shipped
+#   include/sodium/                 the generated version.h does #include
+#                                   "export.h", which cannot resolve next to
+#                                   itself in the generated tree, so the real
+#                                   header directory must be on the path for
+#                                   every consumer of sodium.h - not only for
+#                                   libsodium's own translation units
+#   sodium_generated/sodium/        sodium/version.c includes "version.h"
+#                                   unqualified
 target_include_directories(sodium PUBLIC
     ${THIRD_PARTY}/libsodium/src/libsodium/include
     ${CMAKE_CURRENT_BINARY_DIR}/sodium_generated
-)
-target_include_directories(sodium PRIVATE
     ${THIRD_PARTY}/libsodium/src/libsodium/include/sodium
+    ${CMAKE_CURRENT_BINARY_DIR}/sodium_generated/sodium
 )
 target_compile_definitions(sodium PUBLIC SODIUM_STATIC=1)
 target_compile_definitions(sodium PRIVATE
