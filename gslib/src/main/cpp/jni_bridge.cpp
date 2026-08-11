@@ -413,7 +413,7 @@ JNIEXPORT void JNICALL Java_org_openipc_gslib_NativeGroundStation_nativeSetAlink
     session->station.SetAlinkConfig(config);
 }
 
-JNIEXPORT jboolean JNICALL Java_org_openipc_gslib_NativeGroundStation_nativeGenerateKeyPair(
+JNIEXPORT jboolean JNICALL Java_org_openipc_gslib_NativeKeys_nativeGenerateKeyPair(
     JNIEnv* env, jobject, jstring gs_path, jstring drone_path) {
     std::string error;
     return openipc::gs::GenerateKeyPair(ToStdString(env, gs_path), ToStdString(env, drone_path),
@@ -422,7 +422,7 @@ JNIEXPORT jboolean JNICALL Java_org_openipc_gslib_NativeGroundStation_nativeGene
                : JNI_FALSE;
 }
 
-JNIEXPORT jstring JNICALL Java_org_openipc_gslib_NativeGroundStation_nativeValidateKey(
+JNIEXPORT jstring JNICALL Java_org_openipc_gslib_NativeKeys_nativeValidateKey(
     JNIEnv* env, jobject, jstring path) {
     const openipc::gs::KeyValidation validation =
         openipc::gs::ValidateGsKey(ToStdString(env, path));
