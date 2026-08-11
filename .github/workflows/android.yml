@@ -12,7 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # Deliberately not recursive: devourer keeps vendor kernel drivers
+          # under reference/ as nested submodules, one of which points at a
+          # commit its upstream no longer serves. None of them are compiled
+          # here, and recursing into them breaks the checkout.
+          submodules: true
 
       - uses: actions/setup-java@v4
         with:

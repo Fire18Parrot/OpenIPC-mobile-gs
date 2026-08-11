@@ -64,8 +64,9 @@ than wfb-ng, but it works with hardware you already have.
 ## Building
 
 ```bash
-git clone --recurse-submodules https://github.com/Fire18Parrot/OpenIPC-mobile-gs
+git clone https://github.com/Fire18Parrot/OpenIPC-mobile-gs
 cd OpenIPC-mobile-gs
+git submodule update --init
 ./gradlew assembleDebug
 ```
 
@@ -73,11 +74,10 @@ You need the Android SDK with NDK `27.0.12077973` and CMake 3.22.1. Everything
 else — devourer, wfb-ng, libusb, libsodium — is built from the submodules in
 `third_party/`, so there are no prebuilt binaries in the tree.
 
-If you already cloned without `--recurse-submodules`:
-
-```bash
-git submodule update --init --recursive
-```
+Note the plain `--init` rather than `--init --recursive`. devourer keeps vendor
+kernel drivers under `reference/` as nested submodules, one of which points at a
+commit its upstream no longer serves, so a recursive clone fails. None of them
+are compiled here.
 
 ## Testing
 
