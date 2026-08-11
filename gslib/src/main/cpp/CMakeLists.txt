@@ -93,6 +93,10 @@ target_include_directories(sodium PUBLIC
 )
 target_include_directories(sodium PRIVATE
     ${THIRD_PARTY}/libsodium/src/libsodium/include/sodium
+    # sodium/version.c includes "version.h" unqualified, so the generated
+    # header's own directory has to be on the path as well as its parent
+    # (which serves the <sodium/version.h> form used elsewhere).
+    ${CMAKE_CURRENT_BINARY_DIR}/sodium_generated/sodium
 )
 target_compile_definitions(sodium PUBLIC SODIUM_STATIC=1)
 target_compile_definitions(sodium PRIVATE
