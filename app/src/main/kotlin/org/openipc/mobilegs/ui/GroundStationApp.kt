@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +48,7 @@ import org.openipc.gslib.NativeGroundStation
 import org.openipc.gslib.SourceKind
 import org.openipc.gslib.Telemetry
 import org.openipc.gslib.VideoCodec
+import org.openipc.mobilegs.diag.CrashReporter
 import org.openipc.mobilegs.service.GroundStationService
 import org.openipc.mobilegs.settings.Settings
 import org.openipc.mobilegs.settings.SettingsRepository
@@ -69,6 +71,12 @@ fun GroundStationApp(
         val service by serviceFlow.collectAsState()
         val settings by settingsRepository.settings.collectAsState(initial = Settings())
         var showSettings by remember { mutableStateOf(false) }
+        val context = LocalContext.current
+        // If the last run died, show the report rather than making the user go
+        // looking for it.
+        var showDiagnostics by remember {
+            mutableStateOf(CrashReporter.lastCrash(context) != null)
+        }
 
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             FlightScreen(
@@ -86,7 +94,15 @@ fun GroundStationApp(
                     service = service,
                     keyFile = keyFile,
                     onDismiss = { showSettings = false },
+                    onOpenDiagnostics = {
+                        showSettings = false
+                        showDiagnostics = true
+                    },
                 )
+            }
+
+            if (showDiagnostics) {
+                DiagnosticsScreen(onDismiss = { showDiagnostics = false })
             }
         }
     }
@@ -256,6 +272,7 @@ private fun SettingsScreen(
     service: GroundStationService?,
     keyFile: File,
     onDismiss: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     fun edit(transform: (Settings) -> Settings) {
@@ -375,6 +392,14 @@ private fun SettingsScreen(
             SwitchRow("Record on start", settings.recordVideo) { value ->
                 edit { it.copy(recordVideo = value) }
             }
+
+            SectionTitle("Diagnostics")
+            Text(
+                "The app's own log, readable on the phone - no computer needed.",
+                color = Color(0xFF90A4AE),
+                fontSize = 11.sp,
+            )
+            TextButton(onClick = onOpenDiagnostics) { Text("Open diagnostics") }
 
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Close") }
         }

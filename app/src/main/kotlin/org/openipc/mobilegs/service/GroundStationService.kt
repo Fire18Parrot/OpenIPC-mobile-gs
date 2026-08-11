@@ -26,6 +26,7 @@ import org.openipc.gslib.Telemetry
 import org.openipc.gslib.VideoCodec
 import org.openipc.mobilegs.MainActivity
 import org.openipc.mobilegs.R
+import org.openipc.mobilegs.diag.DiagnosticsLog
 import org.openipc.mobilegs.dvr.VideoRecorder
 import org.openipc.mobilegs.settings.Settings
 import org.openipc.mobilegs.video.VideoDecoder
@@ -99,6 +100,7 @@ class GroundStationService : Service(), GroundStationListener {
             isForeground = true
         } catch (e: Exception) {
             Log.w(TAG, "could not run in the foreground: ${e.message}")
+            DiagnosticsLog.append("foreground refused: ${e.message}")
             isForeground = false
         }
     }
@@ -139,6 +141,7 @@ class GroundStationService : Service(), GroundStationListener {
         )
 
         if (!started) {
+            DiagnosticsLog.append("start failed: ${instance.lastError}")
             _status.value = instance.lastError.ifEmpty { "could not start the ground station" }
             instance.close()
             station = null
@@ -218,6 +221,7 @@ class GroundStationService : Service(), GroundStationListener {
 
     override fun onStatus(message: String) {
         Log.i(TAG, message)
+        DiagnosticsLog.append(message)
         _status.value = message
     }
 
