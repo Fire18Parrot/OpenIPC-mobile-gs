@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package org.openipc.mobilegs.ui
 
+import android.os.SystemClock
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.foundation.background
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import java.io.File
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.openipc.gslib.Bandwidth
@@ -145,11 +147,42 @@ private fun FlightScreen(
         return
     }
     val stats by service.linkStats.collectAsState()
+    val telemetry by service.telemetry.collectAsState()
     val osd by service.osd.collectAsState()
     val status by service.status.collectAsState()
     val running by service.running.collectAsState()
     val fps by service.videoFps.collectAsState()
     val videoSize by service.videoSize.collectAsState()
+    val linkUpSince by service.linkUpSinceMs.collectAsState()
+
+    // The flight clock, ticked here rather than in the service: it is a
+    // presentation concern, and one recomposition a second is nothing.
+    var flightSeconds by remember { mutableStateOf(0L) }
+    LaunchedEffect(linkUpSince) {
+        if (linkUpSince == 0L) {
+            flightSeconds = 0L
+            return@LaunchedEffect
+        }
+        while (true) {
+            flightSeconds = (SystemClock.elapsedRealtime() - linkUpSince) / 1000
+            delay(1000)
+        }
+    }
+
+    // Whether to cover the screen with the no-signal fill. Held off for a
+    // moment after the link drops, because packetsAll is a per-interval count
+    // and a lossy link can read zero for one interval while the picture is
+    // still perfectly good - flashing a background over live video would be
+    // worse than the gap it papers over.
+    var noPicture by remember { mutableStateOf(true) }
+    LaunchedEffect(stats.isLive) {
+        if (stats.isLive) {
+            noPicture = false
+        } else {
+            delay(1500)
+            noPicture = true
+        }
+    }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // A SurfaceView, not a TextureView: it hands MediaCodec a buffer queue
@@ -188,6 +221,15 @@ private fun FlightScreen(
             },
         )
 
+        // Over the SurfaceView rather than behind it: an idle SurfaceView is an
+        // opaque black hole punched through the window, so anything drawn under
+        // it is invisible. A ground station spends most of its life on this
+        // screen, and an OLED panel keeps whatever sits still on it - hence the
+        // moving default. Removed the instant video returns.
+        if (noPicture) {
+            NoSignalBackground(settings.noSignalStyle, Modifier.fillMaxSize())
+        }
+
         if (settings.osdEnabled) {
             osd?.let { OsdOverlay(it, Modifier.fillMaxSize()) }
         }
@@ -203,6 +245,17 @@ private fun FlightScreen(
             fps = fps,
             recording = service.isRecording,
             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+        )
+
+        // Bottom right, where the goggles put their numbers. Which of them
+        // appear is set per element in the menu, under Camera.
+        StatusStrip(
+            stats = stats,
+            telemetry = telemetry,
+            settings = settings,
+            fps = fps,
+            flightSeconds = flightSeconds,
+            modifier = Modifier.align(Alignment.BottomEnd),
         )
 
         // The SBC opens its menu with a goggle button; a phone needs something

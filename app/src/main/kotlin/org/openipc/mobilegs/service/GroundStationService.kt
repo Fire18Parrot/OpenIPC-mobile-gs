@@ -81,6 +81,14 @@ class GroundStationService : Service(), GroundStationListener {
     private val _videoFps = MutableStateFlow(0)
     val videoFps: StateFlow<Int> = _videoFps
 
+    /**
+     * When the link first came up, as an uptime clock, or 0 while it is down.
+     * SystemClock rather than wall time: this is a duration, and a clock change
+     * mid-flight must not make it jump.
+     */
+    private val _linkUpSinceMs = MutableStateFlow(0L)
+    val linkUpSinceMs: StateFlow<Long> = _linkUpSinceMs
+
     private var lastFrameCount = 0L
     private var lastFpsAtMs = 0L
 
@@ -189,6 +197,7 @@ class GroundStationService : Service(), GroundStationListener {
         station?.close()
         station = null
         _running.value = false
+        _linkUpSinceMs.value = 0L
         releaseWakeLock()
         if (isForeground) {
             @Suppress("DEPRECATION")
@@ -241,6 +250,12 @@ class GroundStationService : Service(), GroundStationListener {
     override fun onStats(stats: LinkStats, telemetry: Telemetry) {
         _linkStats.value = stats
         _telemetry.value = telemetry
+
+        // Start the flight clock the moment the link is genuinely up, not when
+        // the user pressed Start: what a pilot wants timed is the flight.
+        if (stats.isLive && _linkUpSinceMs.value == 0L) {
+            _linkUpSinceMs.value = android.os.SystemClock.elapsedRealtime()
+        }
 
         // The decoder cannot infer the codec: fed an H.265 stream it never sees
         // a keyframe, so it stays silent while data pours in. The depacketiser

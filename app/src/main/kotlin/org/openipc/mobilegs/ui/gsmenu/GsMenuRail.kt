@@ -84,6 +84,18 @@ object GsRails {
                 "gs system audio",
                 "gs system audio_device",
                 "gs system audio_volume",
+                // The corner strip and the screen behind the video. These have
+                // no gsmenu.sh equivalent - an SBC drives a fixed goggles panel
+                // and cannot burn it in the way a phone's OLED burns - but they
+                // are display settings, so this is where they belong.
+                "gs app osd",
+                "gs app no_signal",
+                "gs app strip_flight_time",
+                "gs app strip_craft_battery",
+                "gs app strip_signal",
+                "gs app strip_bitrate",
+                "gs app strip_fps",
+                "gs app strip_phone_battery",
             ),
         ),
 
@@ -106,7 +118,6 @@ object GsRails {
                 // way to edit.
                 "gs app link_id",
                 "gs app udp_port",
-                "gs app osd",
                 "gs app mavlink_enabled",
                 "gs app mavlink_kind",
                 "gs app mavlink_host",

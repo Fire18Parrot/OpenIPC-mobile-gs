@@ -206,6 +206,33 @@ object GsMenu {
                             "Where the air unit's own network sends RTP.",
                         ),
                         GsMenuItem("gs app osd", "Show OSD", GsMenuValue.Toggle),
+
+                        // The corner strip. Goggles put their own numbers in the
+                        // bottom right and let the pilot choose which; these are
+                        // ours, and each is off-able for the same reason.
+                        GsMenuItem(
+                            "gs app no_signal", "No-signal background",
+                            GsMenuValue.Choice(listOf("drift", "black", "grey")),
+                            "Drift moves a soft gradient so an OLED cannot stain.",
+                        ),
+                        GsMenuItem(
+                            "gs app strip_flight_time", "Show flight time",
+                            GsMenuValue.Toggle,
+                            "Time since the link came up.",
+                        ),
+                        GsMenuItem(
+                            "gs app strip_craft_battery", "Show craft battery",
+                            GsMenuValue.Toggle,
+                            "Pack voltage and remaining percent, from MAVLink.",
+                        ),
+                        GsMenuItem("gs app strip_signal", "Show signal", GsMenuValue.Toggle),
+                        GsMenuItem("gs app strip_bitrate", "Show bitrate", GsMenuValue.Toggle),
+                        GsMenuItem("gs app strip_fps", "Show frame rate", GsMenuValue.Toggle),
+                        GsMenuItem(
+                            "gs app strip_phone_battery", "Show phone battery",
+                            GsMenuValue.Toggle,
+                        ),
+
                         GsMenuItem(
                             "gs app mavlink_enabled", "MAVLink out",
                             GsMenuValue.Toggle,
