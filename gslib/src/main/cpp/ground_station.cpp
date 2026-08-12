@@ -218,6 +218,15 @@ void GroundStation::SendUplink(uint8_t radio_port, const uint8_t* data, size_t s
 void GroundStation::StatsLoop() {
     uint64_t next_alink_ms = NowMs();
 
+    // Enough to tell the two failures apart. A key that does not match the air
+    // unit and a key that has simply not been announced yet look identical for
+    // the first second, and only one of them is the user's problem.
+    bool announced_session = false;
+    bool warned_about_key = false;
+    uint64_t started_ms = NowMs();
+    uint64_t decrypt_errors = 0;
+    uint64_t frames_seen = 0;
+
     while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kStatsIntervalMs));
         if (!running_) {
@@ -231,6 +240,40 @@ void GroundStation::StatsLoop() {
             snapshot.timestamp_ms = NowMs();
         }
         stats_.Publish(snapshot);
+
+        frames_seen += snapshot.packets_all;
+        decrypt_errors += snapshot.packets_decrypt_err;
+
+        if (snapshot.session_established && !announced_session) {
+            announced_session = true;
+            if (callbacks_.on_status) {
+                callbacks_.on_status("session key accepted - link up");
+            }
+        }
+
+        // wfb-ng announces the session key once a second, so anything under a
+        // couple of seconds is just the wait. Past that, with frames arriving
+        // and nothing decrypting, the key is the thing to doubt.
+        if (!announced_session && !warned_about_key && decrypt_errors > 0 &&
+            NowMs() - started_ms > 3000) {
+            warned_about_key = true;
+            if (callbacks_.on_status) {
+                callbacks_.on_status(
+                    "receiving frames from the air unit but cannot decrypt them - "
+                    "gs.key does not match its drone.key");
+            }
+        }
+
+        // Frames on the right channel_id but none at all decoding is different
+        // from no frames: it means the radio is fine and the link_id matches.
+        if (!announced_session && frames_seen == 0 && NowMs() - started_ms > 5000 &&
+            !warned_about_key) {
+            warned_about_key = true;
+            if (callbacks_.on_status) {
+                callbacks_.on_status(
+                    "no wfb frames on this channel - check the channel and link_id");
+            }
+        }
 
         const TelemetryState telemetry = mavlink_.telemetry();
         if (callbacks_.on_stats) {

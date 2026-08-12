@@ -35,11 +35,24 @@ public:
     Sink(const std::string& keypair, uint64_t epoch, uint32_t channel_id, StreamCallback callback)
         : Aggregator(keypair, epoch, channel_id), callback_(std::move(callback)) {}
 
-    bool session_established() const { return count_p_session > 0 || session_seen_; }
+    bool session_established() const { return session_ever_; }
+
+    /**
+     * Latch the session state before the counters are cleared. wfb-ng's
+     * clear_stats() resets count_p_session on every stats interval, so reading
+     * it directly makes an established session look like it drops again a
+     * tenth of a second later.
+     */
+    void NoteSessionState() {
+        if (count_p_session > 0) {
+            session_ever_ = true;
+        }
+    }
 
 protected:
     void send_to_socket(const uint8_t* payload, uint16_t packet_size) override {
-        session_seen_ = true;
+        // Payload only ever arrives once a session key has been accepted.
+        session_ever_ = true;
         if (callback_) {
             callback_(payload, packet_size);
         }
@@ -47,7 +60,7 @@ protected:
 
 private:
     StreamCallback callback_;
-    bool session_seen_ = false;
+    bool session_ever_ = false;
 };
 
 WfbReceiver::WfbReceiver(const RadioConfig& radio) : radio_(radio) { ResetSignal(); }
@@ -176,6 +189,7 @@ LinkSnapshot WfbReceiver::TakeSnapshot() {
         snapshot.packets_fec_recovered = sink.count_p_fec_recovered;
         snapshot.packets_bad = sink.count_p_bad;
         snapshot.packets_decrypt_err = sink.count_p_dec_err;
+        sink.NoteSessionState();
         snapshot.session_established = sink.session_established();
         sink.clear_stats();
     }
