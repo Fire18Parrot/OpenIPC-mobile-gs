@@ -53,6 +53,9 @@ class GroundStationService : Service(), GroundStationListener {
     private var wakeLock: PowerManager.WakeLock? = null
     private var surface: Surface? = null
     private var pendingCodec: VideoCodec = VideoCodec.AUTO
+
+    /** What the decoder is currently configured for, as opposed to requested. */
+    private var activeCodec: VideoCodec = VideoCodec.AUTO
     private var isForeground = false
 
     private val _linkStats = MutableStateFlow(LinkStats())
@@ -125,7 +128,10 @@ class GroundStationService : Service(), GroundStationListener {
         this.surface = surface
         pendingCodec = codec
         if (surface != null && _running.value) {
-            decoder.start(surface, codec)
+            val effective = _linkStats.value.detectedCodec.takeIf { it != VideoCodec.AUTO }
+                ?: codec
+            activeCodec = effective
+            decoder.start(surface, effective)
         } else if (surface == null) {
             decoder.stop()
         }
@@ -157,7 +163,10 @@ class GroundStationService : Service(), GroundStationListener {
 
         _running.value = true
         acquireWakeLock()
-        surface?.let { decoder.start(it, settings.codec) }
+        surface?.let {
+            activeCodec = settings.codec
+            decoder.start(it, settings.codec)
+        }
         if (settings.recordVideo) {
             recorder.start(this, settings.codec)
         }
@@ -224,6 +233,19 @@ class GroundStationService : Service(), GroundStationListener {
     override fun onStats(stats: LinkStats, telemetry: Telemetry) {
         _linkStats.value = stats
         _telemetry.value = telemetry
+
+        // The decoder cannot infer the codec: fed an H.265 stream it never sees
+        // a keyframe, so it stays silent while data pours in. The depacketiser
+        // knows what is actually on the wire, so follow it.
+        val detected = stats.detectedCodec
+        if (detected != VideoCodec.AUTO && detected != activeCodec) {
+            val target = surface
+            if (target != null) {
+                DiagnosticsLog.append("video is $detected - restarting the decoder")
+                activeCodec = detected
+                decoder.start(target, detected)
+            }
+        }
 
         // Stats arrive every 100 ms; frames are counted over a whole second so
         // the number on screen is steady enough to read in flight.

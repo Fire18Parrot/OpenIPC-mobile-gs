@@ -66,6 +66,13 @@ public:
     bool SetChannel(int channel, Bandwidth bandwidth);
 
     LinkSnapshot link_stats() const { return stats_.Get(); }
+
+    /**
+     * What the RTP depacketiser found on the wire. The decoder cannot guess
+     * this for itself: an H.265 stream fed to an H.264 decoder never yields a
+     * keyframe, so playback stays black with data flowing.
+     */
+    VideoCodec detected_codec() const { return depacketizer_.codec(); }
     TelemetryState telemetry() const { return mavlink_.telemetry(); }
     std::string last_error() const;
 

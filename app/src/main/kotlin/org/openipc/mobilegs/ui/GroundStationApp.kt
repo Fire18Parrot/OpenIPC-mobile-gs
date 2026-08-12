@@ -171,7 +171,10 @@ private fun FlightScreen(
         // osd.json), so it goes there.
         InGoggleOsd(
             stats = stats,
-            codec = settings.codec.name.lowercase(),
+            // Show what is on the wire, not what was asked for: "auto" tells
+            // a pilot nothing, and the difference is what a black screen means.
+            codec = stats.detectedCodec.takeIf { it != VideoCodec.AUTO }
+                ?.name?.lowercase() ?: "no video",
             fps = fps,
             recording = service.isRecording,
             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),

@@ -100,6 +100,8 @@ data class LinkStats(
     val antennas: Int = 0,
     val sessionEstablished: Boolean = false,
     val bytesAll: Int = 0,
+    /** The codec actually seen on the wire, which may differ from the setting. */
+    val detectedCodec: VideoCodec = VideoCodec.AUTO,
 ) {
     /** True when packets are arriving and decrypting - i.e. the link is up. */
     val isLive: Boolean get() = sessionEstablished && packetsAll > 0

@@ -49,6 +49,7 @@ enum StatsInt {
     kStatArmed,
     kStatGpsFix,
     kStatSatellites,
+    kStatDetectedCodec,
     kStatIntCount,
 };
 
@@ -267,6 +268,17 @@ JNIEXPORT jboolean JNICALL Java_org_openipc_gslib_NativeGroundStation_nativeStar
         ints[kStatArmed] = telemetry.armed ? 1 : 0;
         ints[kStatGpsFix] = telemetry.gps_fix_type;
         ints[kStatSatellites] = telemetry.satellites;
+        switch (session->station.detected_codec()) {
+            case VideoCodec::kH264:
+                ints[kStatDetectedCodec] = 1;
+                break;
+            case VideoCodec::kH265:
+                ints[kStatDetectedCodec] = 2;
+                break;
+            default:
+                ints[kStatDetectedCodec] = 0;
+                break;
+        }
 
         jfloat floats[kStatFloatCount] = {};
         floats[kStatRoll] = telemetry.roll_rad;
