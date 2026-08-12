@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -148,13 +149,23 @@ private fun FlightScreen(
     val status by service.status.collectAsState()
     val running by service.running.collectAsState()
     val fps by service.videoFps.collectAsState()
+    val videoSize by service.videoSize.collectAsState()
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // A SurfaceView, not a TextureView: it hands MediaCodec a buffer queue
         // the compositor consumes directly, which is both lower latency and
         // lower power than routing frames through the view hierarchy.
+        //
+        // Sized to the stream's own aspect rather than the screen's. Filling a
+        // 20:9 phone with a 16:9 picture would stretch it; this gives the video
+        // every pixel it can honestly use and leaves the rest black.
+        val aspect = if (videoSize.second > 0) {
+            videoSize.first.toFloat() / videoSize.second.toFloat()
+        } else {
+            16f / 9f
+        }
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().aspectRatio(aspect),
             factory = { context ->
                 SurfaceView(context).apply {
                     holder.addCallback(object : SurfaceHolder.Callback {

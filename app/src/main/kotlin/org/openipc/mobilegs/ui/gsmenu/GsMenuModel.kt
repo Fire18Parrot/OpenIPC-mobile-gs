@@ -23,8 +23,11 @@ sealed interface GsMenuValue {
     /** `emit_values "1 100"` - an inclusive numeric range. */
     data class Range(val min: Int, val max: Int, val step: Int = 1) : GsMenuValue
 
-    /** Free text, e.g. an SSID or a password. */
+    /** Free text, e.g. an SSID or a host. */
     data object Text : GsMenuValue
+
+    /** A number typed rather than picked: ports, link ids. */
+    data class Number(val min: Int = 0, val max: Int = Int.MAX_VALUE) : GsMenuValue
 
     /** A toggle. Upstream spells these as two-value lists. */
     data object Toggle : GsMenuValue
@@ -186,6 +189,66 @@ object GsMenu {
                             supported = false,
                         ),
                         GsMenuItem("gs apfpv reset", "Reset", GsMenuValue.Action),
+                    ),
+                ),
+                GsMenuSection(
+                    name = "app",
+                    title = "App",
+                    items = listOf(
+                        GsMenuItem(
+                            "gs app link_id", "Link ID",
+                            GsMenuValue.Number(0, 16_777_215),
+                            "Must match the air unit's wfb.yaml.",
+                        ),
+                        GsMenuItem(
+                            "gs app udp_port", "APFPV video port",
+                            GsMenuValue.Number(1, 65_535),
+                            "Where the air unit's own network sends RTP.",
+                        ),
+                        GsMenuItem("gs app osd", "Show OSD", GsMenuValue.Toggle),
+                        GsMenuItem(
+                            "gs app mavlink_enabled", "MAVLink out",
+                            GsMenuValue.Toggle,
+                            "Share telemetry with a ground control station.",
+                        ),
+                        GsMenuItem(
+                            "gs app mavlink_kind", "MAVLink transport",
+                            GsMenuValue.Choice(listOf("udp_out", "udp_server", "tcp_server")),
+                        ),
+                        GsMenuItem("gs app mavlink_host", "MAVLink host", GsMenuValue.Text),
+                        GsMenuItem(
+                            "gs app mavlink_port", "MAVLink port",
+                            GsMenuValue.Number(1, 65_535),
+                        ),
+                        GsMenuItem(
+                            "gs app mavlink_uplink", "Allow uplink from GCS",
+                            GsMenuValue.Toggle,
+                            "Lets a GCS command the aircraft, not only watch it.",
+                        ),
+                        GsMenuItem(
+                            "gs app second_endpoint", "Second endpoint",
+                            GsMenuValue.Toggle,
+                            "A second GCS can attach without displacing the first.",
+                        ),
+                        GsMenuItem(
+                            "gs app second_kind", "Second transport",
+                            GsMenuValue.Choice(listOf("udp_out", "udp_server", "tcp_server")),
+                        ),
+                        GsMenuItem(
+                            "gs app second_port", "Second port",
+                            GsMenuValue.Number(1, 65_535),
+                        ),
+                        GsMenuItem("gs app alink_host", "Adaptive link host", GsMenuValue.Text),
+                        GsMenuItem(
+                            "gs app alink_port", "Adaptive link port",
+                            GsMenuValue.Number(1, 65_535),
+                        ),
+                        GsMenuItem(
+                            "gs app alink_idr", "Request keyframes on loss",
+                            GsMenuValue.Toggle,
+                        ),
+                        GsMenuItem("gs app alink_penalty", "Apply noise penalty", GsMenuValue.Toggle),
+                        GsMenuItem("gs app alink_fec", "Allow FEC increase", GsMenuValue.Toggle),
                     ),
                 ),
                 GsMenuSection(

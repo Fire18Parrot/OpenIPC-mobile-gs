@@ -38,6 +38,14 @@ class VideoDecoder {
     var onFirstFrame: (() -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
+    /**
+     * The stream's real pixel dimensions, once the decoder reports them. The
+     * view has to be sized from this: a Surface that simply fills the screen
+     * stretches a 16:9 stream across a 20:9 phone, and everything on screen
+     * ends up subtly wrong.
+     */
+    var onVideoSize: ((Int, Int) -> Unit)? = null
+
     val decodedFrames: Long get() = framesDecoded.get()
     val droppedFrames: Long get() = framesDropped.get()
     val isRunning: Boolean get() = running.get()
@@ -164,7 +172,13 @@ class VideoDecoder {
                 }
 
                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    Log.i(TAG, "output format: ${active.outputFormat}")
+                    val format = active.outputFormat
+                    Log.i(TAG, "output format: $format")
+                    runCatching {
+                        val width = format.getInteger(MediaFormat.KEY_WIDTH)
+                        val height = format.getInteger(MediaFormat.KEY_HEIGHT)
+                        if (width > 0 && height > 0) onVideoSize?.invoke(width, height)
+                    }
                 }
 
                 else -> return

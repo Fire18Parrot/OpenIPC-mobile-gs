@@ -101,6 +101,25 @@ object GsRails {
                 "gs wifi ssid",
                 "gs wifi networks",
                 "gs wifi hotspot",
+                // App-only, with no gsmenu.sh equivalent: the SBC keeps these
+                // in wifibroadcast.cfg and alink_gs.conf, which a phone has no
+                // way to edit.
+                "gs app link_id",
+                "gs app udp_port",
+                "gs app osd",
+                "gs app mavlink_enabled",
+                "gs app mavlink_kind",
+                "gs app mavlink_host",
+                "gs app mavlink_port",
+                "gs app mavlink_uplink",
+                "gs app second_endpoint",
+                "gs app second_kind",
+                "gs app second_port",
+                "gs app alink_host",
+                "gs app alink_port",
+                "gs app alink_idr",
+                "gs app alink_penalty",
+                "gs app alink_fec",
             ),
         ),
     )

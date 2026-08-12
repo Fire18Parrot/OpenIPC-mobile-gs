@@ -73,6 +73,10 @@ class GroundStationService : Service(), GroundStationListener {
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running
 
+    /** The stream's pixel size, so the view can keep its aspect ratio. */
+    private val _videoSize = MutableStateFlow(16 to 9)
+    val videoSize: StateFlow<Pair<Int, Int>> = _videoSize
+
     /** Decoded frames per second, for the OSD's video widget. */
     private val _videoFps = MutableStateFlow(0)
     val videoFps: StateFlow<Int> = _videoFps
@@ -85,6 +89,10 @@ class GroundStationService : Service(), GroundStationListener {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        decoder.onVideoSize = { width, height ->
+            _videoSize.value = width to height
+            DiagnosticsLog.append("video is ${width}x$height")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

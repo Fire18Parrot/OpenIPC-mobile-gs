@@ -2,6 +2,7 @@
 package org.openipc.mobilegs.ui.gsmenu
 
 import org.openipc.gslib.Bandwidth
+import org.openipc.gslib.MavlinkEndpointKind
 import org.openipc.gslib.SourceKind
 import org.openipc.gslib.VideoCodec
 import org.openipc.mobilegs.settings.Settings
@@ -33,6 +34,24 @@ object GsMenuBinding {
         // not something the phone can honestly offer yet.
         "gs system dvr_mode" -> "raw"
         "gs apfpv status" -> if (settings.source == SourceKind.UDP) "active" else "inactive"
+
+        "gs app link_id" -> settings.linkId.toString()
+        "gs app udp_port" -> settings.udpVideoPort.toString()
+        "gs app osd" -> settings.osdEnabled.onOff()
+        "gs app mavlink_enabled" -> settings.mavlinkEnabled.onOff()
+        "gs app mavlink_kind" -> settings.mavlinkKind.wire()
+        "gs app mavlink_host" -> settings.mavlinkHost
+        "gs app mavlink_port" -> settings.mavlinkPort.toString()
+        "gs app mavlink_uplink" -> settings.mavlinkUplink.onOff()
+        "gs app second_endpoint" -> settings.secondEndpointEnabled.onOff()
+        "gs app second_kind" -> settings.secondEndpointKind.wire()
+        "gs app second_port" -> settings.secondEndpointPort.toString()
+        "gs app alink_host" -> settings.alinkHost
+        "gs app alink_port" -> settings.alinkPort.toString()
+        "gs app alink_idr" -> settings.alinkAllowIdr.onOff()
+        "gs app alink_penalty" -> settings.alinkAllowPenalty.onOff()
+        "gs app alink_fec" -> settings.alinkAllowFecIncrease.onOff()
+
         else -> null
     }
 
@@ -61,6 +80,37 @@ object GsMenuBinding {
 
         "gs system rec_enabled" -> settings.copy(recordVideo = value.isOn())
 
+        "gs app link_id" -> value.toIntOrNull()?.let { settings.copy(linkId = it) }
+        "gs app udp_port" -> value.toIntOrNull()?.let { settings.copy(udpVideoPort = it) }
+        "gs app osd" -> settings.copy(osdEnabled = value.isOn())
+        "gs app mavlink_enabled" -> settings.copy(mavlinkEnabled = value.isOn())
+        "gs app mavlink_kind" -> kindOf(value)?.let { settings.copy(mavlinkKind = it) }
+        "gs app mavlink_host" -> settings.copy(mavlinkHost = value)
+        "gs app mavlink_port" -> value.toIntOrNull()?.let { settings.copy(mavlinkPort = it) }
+        "gs app mavlink_uplink" -> settings.copy(mavlinkUplink = value.isOn())
+        "gs app second_endpoint" -> settings.copy(secondEndpointEnabled = value.isOn())
+        "gs app second_kind" -> kindOf(value)?.let { settings.copy(secondEndpointKind = it) }
+        "gs app second_port" -> value.toIntOrNull()?.let { settings.copy(secondEndpointPort = it) }
+        "gs app alink_host" -> settings.copy(alinkHost = value)
+        "gs app alink_port" -> value.toIntOrNull()?.let { settings.copy(alinkPort = it) }
+        "gs app alink_idr" -> settings.copy(alinkAllowIdr = value.isOn())
+        "gs app alink_penalty" -> settings.copy(alinkAllowPenalty = value.isOn())
+        "gs app alink_fec" -> settings.copy(alinkAllowFecIncrease = value.isOn())
+
+        else -> null
+    }
+
+    /** Endpoint kinds are shown by their wire name, not the enum's. */
+    private fun MavlinkEndpointKind.wire(): String = when (this) {
+        MavlinkEndpointKind.UDP_OUT -> "udp_out"
+        MavlinkEndpointKind.UDP_SERVER -> "udp_server"
+        MavlinkEndpointKind.TCP_SERVER -> "tcp_server"
+    }
+
+    private fun kindOf(value: String): MavlinkEndpointKind? = when (value) {
+        "udp_out" -> MavlinkEndpointKind.UDP_OUT
+        "udp_server" -> MavlinkEndpointKind.UDP_SERVER
+        "tcp_server" -> MavlinkEndpointKind.TCP_SERVER
         else -> null
     }
 
@@ -81,6 +131,7 @@ object GsMenuBinding {
             }
         }
         GsMenuValue.Toggle -> listOf("off", "on")
+        is GsMenuValue.Number -> emptyList()
         is GsMenuValue.Dynamic -> when (value.source) {
             // 2.4 GHz plus the 5 GHz channels OpenIPC air units actually use.
             "wifi_channels" -> WIFI_CHANNELS

@@ -2,11 +2,14 @@
 package org.openipc.mobilegs.ui.gsmenu
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,12 +30,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -115,6 +126,7 @@ fun GsMenuScreen(
     }
 
     val rail = GsRails.byId(railId)
+    BackHandler(onBack = onDismiss)
 
     Box(Modifier.fillMaxSize().background(Goggles.scrim)) {
         Row(
@@ -161,8 +173,30 @@ private fun RailColumn(current: String, onSelect: (String) -> Unit, onDismiss: (
             .fillMaxHeight()
             .background(Goggles.panel, RoundedCornerShape(5.dp))
             .border(1.dp, Goggles.hairline, RoundedCornerShape(5.dp))
-            .padding(vertical = 6.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 4.dp),
     ) {
+        // Close first, not last: on a short screen the bottom of the rail is
+        // the part that gets cut off, and the way out must never be the thing
+        // that disappears.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onDismiss)
+                .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = "Close",
+                tint = Goggles.focus,
+                modifier = Modifier.size(21.dp),
+            )
+            Text(text = "Close", color = Goggles.text, fontSize = 11.sp)
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Goggles.hairlineSoft))
+
         GsRails.entries.forEach { entry ->
             val selected = entry.id == current
             Column(
@@ -170,9 +204,9 @@ private fun RailColumn(current: String, onSelect: (String) -> Unit, onDismiss: (
                     .fillMaxWidth()
                     .background(if (selected) Goggles.panelDeep else Color.Transparent)
                     .clickable { onSelect(entry.id) }
-                    .padding(vertical = 14.dp),
+                    .padding(vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Icon(
                     imageVector = entry.icon,
@@ -188,26 +222,6 @@ private fun RailColumn(current: String, onSelect: (String) -> Unit, onDismiss: (
             }
         }
 
-        Spacer(Modifier.weight(1f))
-
-        // The goggles close their menu with a hardware button; a phone needs
-        // something to press, and it belongs with the other navigation.
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onDismiss)
-                .padding(vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Close,
-                contentDescription = "Close",
-                tint = Goggles.textDim,
-                modifier = Modifier.size(22.dp),
-            )
-            Text(text = "Close", color = Goggles.textDim, fontSize = 11.sp)
-        }
     }
 }
 
@@ -334,6 +348,70 @@ private fun ValueDropdown(
     }
 }
 
+/**
+ * A host or a port cannot come from a list, so those open a field instead.
+ * Committed on Save rather than per keystroke: half a typed IP address is a
+ * worse setting than the old one.
+ */
+@Composable
+private fun ValueField(
+    label: String,
+    current: String,
+    numeric: Boolean,
+    enabled: Boolean,
+    onCommit: (String) -> Unit,
+) {
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember(current) { mutableStateOf(current) }
+
+    Row(
+        Modifier
+            .then(if (enabled) Modifier.clickable { editing = true } else Modifier)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Text(
+            text = current.ifEmpty { "-" },
+            color = if (enabled) Goggles.textDim else Goggles.textFaint,
+            fontSize = 13.sp,
+        )
+        if (enabled) Text("✎", color = Goggles.textDim, fontSize = 11.sp)
+    }
+
+    if (editing) {
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            containerColor = Color(0xF71E2125),
+            title = { Text(label, color = Goggles.text, fontSize = 15.sp) },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { entered ->
+                        draft = if (numeric) entered.filter { it.isDigit() } else entered
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    editing = false
+                    if (draft.isNotBlank()) onCommit(draft.trim())
+                }) { Text("Save", color = Goggles.focus) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    editing = false
+                    draft = current
+                }) { Text("Cancel", color = Goggles.textDim) }
+            },
+        )
+    }
+}
+
 @Composable
 private fun GogglesSwitch(checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
     Switch(
@@ -379,6 +457,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.settingRows(
                 ) { checked ->
                     GsMenuBinding.write(item.path, if (checked) "on" else "off", settings)
                         ?.let(onChange)
+                }
+            }
+        } else if (item.value is GsMenuValue.Text || item.value is GsMenuValue.Number) {
+            MenuRow(item.label, note, enabled = editable) {
+                ValueField(
+                    label = item.label,
+                    current = current ?: "",
+                    numeric = item.value is GsMenuValue.Number,
+                    enabled = editable,
+                ) { entered ->
+                    GsMenuBinding.write(item.path, entered, settings)?.let(onChange)
                 }
             }
         } else {
