@@ -247,4 +247,11 @@ object GsMenu {
 
     fun section(target: String, section: String): GsMenuSection? =
         targets.firstOrNull { it.name == target }?.sections?.firstOrNull { it.name == section }
+
+    /** Look an item up by its upstream path, which is its identity. */
+    fun item(path: String): GsMenuItem? =
+        targets.asSequence()
+            .flatMap { it.sections.asSequence() }
+            .flatMap { it.items.asSequence() }
+            .firstOrNull { it.path == path }
 }

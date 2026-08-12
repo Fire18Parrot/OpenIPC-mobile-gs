@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +81,17 @@ fun GroundStationApp(
             mutableStateOf(CrashReporter.lastCrash(context) != null)
         }
 
+        // The menu's Status panel needs live link state. Collected here rather
+        // than at the call site because a composable may not be invoked from
+        // inside a safe-call chain, and the service is nullable until bound.
+        var menuStats by remember { mutableStateOf(LinkStats()) }
+        var menuFps by remember { mutableStateOf(0) }
+        LaunchedEffect(service) {
+            val active = service ?: return@LaunchedEffect
+            launch { active.linkStats.collect { menuStats = it } }
+            launch { active.videoFps.collect { menuFps = it } }
+        }
+
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             FlightScreen(
                 service = service,
@@ -92,6 +104,8 @@ fun GroundStationApp(
             if (showSettings) {
                 GsMenuScreen(
                     settings = settings,
+                    stats = menuStats,
+                    videoFps = menuFps,
                     keyStatus = keyStatus(keyFile),
                     onChange = { updated ->
                         scope.launch { settingsRepository.update { updated } }
