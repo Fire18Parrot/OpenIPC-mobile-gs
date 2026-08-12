@@ -26,8 +26,11 @@ five rail entries map almost one-to-one onto sections we already have.
 ### Using it
 
 - Click a rail entry to change section.
-- Click a row to cycle its value, or a switch to toggle it.
-- Keyboard: <kbd>↑</kbd><kbd>↓</kbd> move, <kbd>←</kbd><kbd>→</kbd> change.
+- Click a row to open its list of values, then pick one. Switches toggle in
+  place.
+- Keyboard: <kbd>↑</kbd><kbd>↓</kbd> move, <kbd>Enter</kbd> opens the list,
+  <kbd>Esc</kbd> closes it. <kbd>←</kbd><kbd>→</kbd> still nudge a value
+  without opening anything, which is quicker on a two-option row.
 - **Flight view** at the bottom previews the OSD in the same language.
 
 Rows greyed out are present in the SBC menu but cannot be served by a phone —

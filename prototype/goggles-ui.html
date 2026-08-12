@@ -178,9 +178,49 @@
     gap: 7px;
     white-space: nowrap;
   }
-  /* The stacked chevrons DJI puts after a cyclable value. */
-  .stepper { display: inline-flex; flex-direction: column; line-height: 0.62; font-size: 9px; color: var(--text-dim); }
+  /* A caret, not DJI's stacked stepper: this list opens rather than cycles,
+     and the affordance should say which. */
+  .caret { font-size: 10px; color: var(--text-dim); line-height: 1; }
+  .row.is-open .caret { color: var(--focus); }
   .chev-right { color: var(--text-dim); font-size: 15px; line-height: 1; }
+
+  /* Floated at viewport level rather than inside the row: the rows list
+     scrolls, and a menu nested inside it would be clipped at the panel edge. */
+  .dropdown {
+    position: fixed;
+    z-index: 20;
+    min-width: 190px;
+    max-height: 264px;
+    overflow-y: auto;
+    background: rgba(30, 33, 37, 0.97);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 4px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  }
+  .dropdown[hidden] { display: none; }
+  .dropdown button {
+    appearance: none;
+    background: none;
+    border: 2px solid transparent;
+    border-radius: 3px;
+    width: 100%;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    padding: 9px 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .dropdown button:hover { background: rgba(255, 255, 255, 0.07); }
+  .dropdown button.is-cursor { border-color: var(--focus); }
+  .dropdown button[aria-selected="true"] { color: var(--focus); }
+  .dropdown button[aria-selected="true"]::after { content: "\2713"; font-size: 12px; }
 
   .toggle {
     width: 44px; height: 24px;
@@ -290,12 +330,14 @@
   </div>
 </div>
 
+<div class="dropdown" id="dropdown" role="listbox" hidden></div>
+
 <div class="controls">
   <div class="seg" role="group" aria-label="Preview">
     <button id="viewMenu" aria-pressed="true">Menu</button>
     <button id="viewFlight" aria-pressed="false">Flight view</button>
   </div>
-  <span><strong>Navigate</strong> <kbd>↑</kbd><kbd>↓</kbd> &nbsp; <strong>Change</strong> <kbd>←</kbd><kbd>→</kbd> or click &nbsp; <strong>Section</strong> <kbd>Tab</kbd></span>
+  <span><strong>Move</strong> <kbd>↑</kbd><kbd>↓</kbd> &nbsp; <strong>Open list</strong> <kbd>Enter</kbd> or click &nbsp; <strong>Nudge</strong> <kbd>←</kbd><kbd>→</kbd> &nbsp; <strong>Close</strong> <kbd>Esc</kbd></span>
   <span style="color:var(--text-faint)">Rows greyed out are in the SBC menu but cannot be served by a phone.</span>
 </div>
 
@@ -382,6 +424,8 @@
 
   let sectionIndex = 2;   // Transmission, the section a pilot opens most.
   let rowIndex = 0;
+  let openIndex = null;   // row whose value list is open, if any
+  let optionCursor = 0;   // highlighted entry inside that list
 
   const rail = document.getElementById('rail');
   const rowsEl = document.getElementById('rows');
@@ -398,6 +442,8 @@
       button.addEventListener('click', () => {
         sectionIndex = i;
         rowIndex = 0;
+        openIndex = null;
+        dropdownEl.hidden = true;
         render();
       });
       rail.appendChild(button);
@@ -412,6 +458,72 @@
   function valueText(row) {
     if (row.options) return row.options[row.index] + (row.suffix || '');
     return row.value || '';
+  }
+
+  const dropdownEl = document.getElementById('dropdown');
+
+  function closeDropdown() {
+    if (openIndex === null) return;
+    openIndex = null;
+    dropdownEl.hidden = true;
+    render();
+  }
+
+  function commitOption(index) {
+    const row = SECTIONS[sectionIndex].rows[openIndex];
+    if (row) row.index = index;
+    closeDropdown();
+  }
+
+  function openDropdown(i) {
+    const row = SECTIONS[sectionIndex].rows[i];
+    if (!row || !row.options || row.locked) return;
+    openIndex = i;
+    optionCursor = row.index;
+    render();
+    paintDropdown();
+  }
+
+  function paintDropdown() {
+    if (openIndex === null) { dropdownEl.hidden = true; return; }
+    const row = SECTIONS[sectionIndex].rows[openIndex];
+    const anchor = rowsEl.children[openIndex];
+    if (!row || !anchor) { dropdownEl.hidden = true; return; }
+
+    dropdownEl.innerHTML = '';
+    row.options.forEach((option, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', String(index === row.index));
+      if (index === optionCursor) button.classList.add('is-cursor');
+      const text = document.createElement('span');
+      text.textContent = option + (row.suffix || '');
+      button.appendChild(text);
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        commitOption(index);
+      });
+      dropdownEl.appendChild(button);
+    });
+
+    dropdownEl.hidden = false;
+    // Measure first, then place: the list is anchored to the row's right edge
+    // and flips above when it would run off the bottom.
+    const rect = anchor.getBoundingClientRect();
+    const height = dropdownEl.offsetHeight;
+    const width = dropdownEl.offsetWidth;
+    let top = rect.bottom + 4;
+    if (top + height > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - height - 4);
+    }
+    let left = rect.right - width;
+    if (left < 8) left = 8;
+    dropdownEl.style.top = top + 'px';
+    dropdownEl.style.left = left + 'px';
+
+    const cursor = dropdownEl.querySelector('.is-cursor');
+    if (cursor) cursor.scrollIntoView({ block: 'nearest' });
   }
 
   function render() {
@@ -459,10 +571,10 @@
         text.textContent = valueText(row);
         value.appendChild(text);
         if (row.options && !row.locked) {
-          const stepper = document.createElement('span');
-          stepper.className = 'stepper';
-          stepper.innerHTML = '<span>▲</span><span>▼</span>';
-          value.appendChild(stepper);
+          const caret = document.createElement('span');
+          caret.className = 'caret';
+          caret.textContent = '▼';
+          value.appendChild(caret);
         } else if (row.chevron) {
           const chev = document.createElement('span');
           chev.className = 'chev-right';
@@ -473,12 +585,17 @@
       }
 
       el.addEventListener('click', () => {
+        const wasOpen = openIndex === i;
         rowIndex = i;
-        if (row.options && !row.locked) row.index = (row.index + 1) % row.options.length;
+        openIndex = null;
         render();
+        if (row.options && !row.locked && !wasOpen) openDropdown(i);
       });
+      if (openIndex === i) el.classList.add('is-open');
       rowsEl.appendChild(el);
     });
+
+    paintDropdown();
   }
 
   function step(delta) {
@@ -492,11 +609,48 @@
 
   document.addEventListener('keydown', (event) => {
     const rows = SECTIONS[sectionIndex].rows;
+
+    // With a list open the arrows belong to it, not to the rows behind.
+    if (openIndex !== null) {
+      const options = rows[openIndex].options;
+      if (event.key === 'ArrowDown') {
+        optionCursor = (optionCursor + 1) % options.length;
+        paintDropdown(); event.preventDefault();
+      } else if (event.key === 'ArrowUp') {
+        optionCursor = (optionCursor - 1 + options.length) % options.length;
+        paintDropdown(); event.preventDefault();
+      } else if (event.key === 'Enter') {
+        commitOption(optionCursor); event.preventDefault();
+      } else if (event.key === 'Escape') {
+        closeDropdown(); event.preventDefault();
+      }
+      return;
+    }
+
     if (event.key === 'ArrowDown') { rowIndex = (rowIndex + 1) % rows.length; render(); event.preventDefault(); }
     else if (event.key === 'ArrowUp') { rowIndex = (rowIndex - 1 + rows.length) % rows.length; render(); event.preventDefault(); }
-    else if (event.key === 'ArrowRight' || event.key === 'Enter') { step(1); event.preventDefault(); }
+    else if (event.key === 'Enter') {
+      // Enter opens the list; the arrows still nudge a value without it, which
+      // is quicker for a two-option row and matches how goggle buttons work.
+      const row = rows[rowIndex];
+      if (row && row.toggle) { row.on = !row.on; render(); }
+      else openDropdown(rowIndex);
+      event.preventDefault();
+    }
+    else if (event.key === 'ArrowRight') { step(1); event.preventDefault(); }
     else if (event.key === 'ArrowLeft') { step(-1); event.preventDefault(); }
   });
+
+  // Dismissal: anywhere outside, or any movement that would leave the list
+  // pointing at the wrong row.
+  document.addEventListener('pointerdown', (event) => {
+    if (openIndex === null) return;
+    if (dropdownEl.contains(event.target)) return;
+    if (rowsEl.children[openIndex] && rowsEl.children[openIndex].contains(event.target)) return;
+    closeDropdown();
+  });
+  rowsEl.addEventListener('scroll', closeDropdown);
+  window.addEventListener('resize', closeDropdown);
 
   // Signal bars, banded exactly as osd.json does it.
   const bars = document.getElementById('bars');
@@ -513,6 +667,7 @@
   const viewMenu = document.getElementById('viewMenu');
   const viewFlight = document.getElementById('viewFlight');
   function setView(showMenu) {
+    if (!showMenu) closeDropdown();
     menu.classList.toggle('hidden', !showMenu);
     osd.classList.toggle('hidden', showMenu);
     viewMenu.setAttribute('aria-pressed', String(showMenu));
