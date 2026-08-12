@@ -266,6 +266,22 @@
     z-index: 2;
   }
   .osd-row { display: flex; align-items: center; gap: 8px; }
+
+  /* The corner strip, bottom right, where the goggles keep their numbers.
+     Each element is a separate toggle under Settings > Camera. */
+  .strip {
+    position: absolute;
+    right: 22px; bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    z-index: 2;
+  }
+  .strip .dim { color: var(--text-dim); }
   .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
   .bars i { width: 3px; background: rgba(255,255,255,0.22); border-radius: 1px; }
   .bars i.on { background: var(--on); }
@@ -319,6 +335,13 @@
     <div class="osd-row">12 480 kbit/s</div>
     <div class="osd-row" style="color:var(--text-faint)">fec 2 lost 0 &nbsp; 8/12</div>
     <div class="osd-row val-bad">● REC</div>
+  </div>
+
+  <div class="strip hidden" id="strip">
+    <span class="dim">04:17</span>
+    <span>22.1V&nbsp; 68%</span>
+    <span>12.5 Mbps</span>
+    <span class="dim">▯ 84%</span>
   </div>
 
   <div class="menu" id="menu">
@@ -402,7 +425,16 @@
         { path: 'gs system dvr_mode', label: 'Record With', options: ['raw','reencode','both'], index: 0,
           note: 'Only raw is implemented: the stream has no reliable timestamps.' },
         { path: 'gs system dvr_max_size', label: 'DVR max size', options: ['5','10','20','40'], index: 2, suffix: ' GB' },
-        { label: 'Show OSD', toggle: true, on: true },
+        { path: 'gs app osd', label: 'Show OSD', toggle: true, on: true },
+        { path: 'gs app no_signal', label: 'No-signal background', options: ['drift','black','grey'], index: 0,
+          note: 'Drift moves a soft gradient so an OLED cannot stain.' },
+        { path: 'gs app strip_flight_time', label: 'Show flight time', toggle: true, on: true },
+        { path: 'gs app strip_craft_battery', label: 'Show craft battery', toggle: true, on: true },
+        { path: 'gs app strip_signal', label: 'Show signal', toggle: true, on: false,
+          note: 'The metrics box in the opposite corner already draws it.' },
+        { path: 'gs app strip_bitrate', label: 'Show bitrate', toggle: true, on: true },
+        { path: 'gs app strip_fps', label: 'Show frame rate', toggle: true, on: false },
+        { path: 'gs app strip_phone_battery', label: 'Show phone battery', toggle: true, on: true },
         { path: 'gs system dvr_reenc_codec', label: 'DVR re-encode codec', value: '—', locked: true },
         { path: 'gs system connector', label: 'Connector', value: 'HDMI', locked: true,
           note: 'SBC-only; the phone renders to its own screen.' },
@@ -664,12 +696,14 @@
 
   const menu = document.getElementById('menu');
   const osd = document.getElementById('osd');
+  const strip = document.getElementById('strip');
   const viewMenu = document.getElementById('viewMenu');
   const viewFlight = document.getElementById('viewFlight');
   function setView(showMenu) {
     if (!showMenu) closeDropdown();
     menu.classList.toggle('hidden', !showMenu);
     osd.classList.toggle('hidden', showMenu);
+    strip.classList.toggle('hidden', showMenu);
     viewMenu.setAttribute('aria-pressed', String(showMenu));
     viewFlight.setAttribute('aria-pressed', String(!showMenu));
   }

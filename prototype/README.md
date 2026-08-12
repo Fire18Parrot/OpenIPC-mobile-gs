@@ -31,7 +31,11 @@ five rail entries map almost one-to-one onto sections we already have.
 - Keyboard: <kbd>↑</kbd><kbd>↓</kbd> move, <kbd>Enter</kbd> opens the list,
   <kbd>Esc</kbd> closes it. <kbd>←</kbd><kbd>→</kbd> still nudge a value
   without opening anything, which is quicker on a two-option row.
-- **Flight view** at the bottom previews the OSD in the same language.
+- **Flight view** at the bottom previews the OSD in the same language: the
+  ported `osd.json` metrics box at the top right, and the corner strip at the
+  bottom right, where the goggles keep flight time, pack voltage, bitrate and
+  phone battery. Each strip element is its own toggle under Settings > Camera,
+  alongside the no-signal background.
 
 Rows greyed out are present in the SBC menu but cannot be served by a phone —
 the HDMI connector, DVR re-encoding, the SBC's own Wi-Fi and audio plumbing, and
