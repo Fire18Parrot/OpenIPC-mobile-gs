@@ -81,6 +81,11 @@ if(OPENIPC_WITH_WFB)
     target_sources(openipc_gs_core PRIVATE
         src/wfb/wfb_receiver.cpp
         src/wfb/session_keys.cpp
+        # The RubyFPV spike. It rides on the wfb-ng target only for zfex:
+        # Ruby's FEC is the same Rizzo GF(2^8) code, so the one part of that
+        # protocol that would have been painful to reimplement is already here
+        # under a licence we can actually use. Nothing else is shared.
+        src/ruby/ruby_receiver.cpp
     )
     target_link_libraries(openipc_gs_core PUBLIC wfb_ng)
     target_compile_definitions(openipc_gs_core PUBLIC OPENIPC_HAVE_WFB=1)
