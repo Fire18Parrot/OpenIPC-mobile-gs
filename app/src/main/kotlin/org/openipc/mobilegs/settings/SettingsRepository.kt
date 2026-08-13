@@ -61,6 +61,13 @@ data class Settings(
      */
     val topOsdEnabled: Boolean = true,
 
+    /**
+     * How the picture sits on a screen that is not its shape. `fit` shows the
+     * whole frame and leaves bars; `fill` uses the whole screen and lets the
+     * edges run off it. Never a stretch either way.
+     */
+    val videoFit: String = "fit",
+
     // The corner strip, bottom right, where the goggles put their numbers.
     // Each element is opt-in: what a pilot wants to see differs.
     val stripBitrate: Boolean = true,
@@ -140,6 +147,7 @@ class SettingsRepository(private val context: Context) {
             recordVideo = prefs[KEY_RECORD] ?: false,
             osdEnabled = prefs[KEY_OSD] ?: true,
             topOsdEnabled = prefs[KEY_TOP_OSD] ?: true,
+            videoFit = prefs[KEY_VIDEO_FIT] ?: "fit",
             stripBitrate = prefs[KEY_STRIP_BITRATE] ?: true,
             stripSignal = prefs[KEY_STRIP_SIGNAL] ?: true,
             stripLinkBar = prefs[KEY_STRIP_LINK_BAR] ?: true,
@@ -180,6 +188,7 @@ class SettingsRepository(private val context: Context) {
             prefs[KEY_RECORD] = next.recordVideo
             prefs[KEY_OSD] = next.osdEnabled
             prefs[KEY_TOP_OSD] = next.topOsdEnabled
+            prefs[KEY_VIDEO_FIT] = next.videoFit
             prefs[KEY_STRIP_BITRATE] = next.stripBitrate
             prefs[KEY_STRIP_SIGNAL] = next.stripSignal
             prefs[KEY_STRIP_LINK_BAR] = next.stripLinkBar
@@ -218,6 +227,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_RECORD = booleanPreferencesKey("record")
         val KEY_OSD = booleanPreferencesKey("osd")
         val KEY_TOP_OSD = booleanPreferencesKey("top_osd")
+        val KEY_VIDEO_FIT = stringPreferencesKey("video_fit")
         val KEY_STRIP_BITRATE = booleanPreferencesKey("strip_bitrate")
         val KEY_STRIP_SIGNAL = booleanPreferencesKey("strip_signal")
         val KEY_STRIP_LINK_BAR = booleanPreferencesKey("strip_link_bar")

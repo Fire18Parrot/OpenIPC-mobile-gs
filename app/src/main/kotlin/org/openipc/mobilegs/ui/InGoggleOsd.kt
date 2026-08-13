@@ -144,18 +144,22 @@ fun InGoggleOsd(
 
             // FEC behaviour: not a named widget upstream, but it is what the
             // SBC's wfbcli facts feed, and it is the number that tells a pilot
-            // the link is degrading before the picture does.
-            Text(
-                text = "fec ${stats.packetsRecovered}  lost ${stats.packetsLost}" +
-                    if (stats.fecK > 0) "  ${stats.fecK}/${stats.fecN}" else "",
-                color = when {
-                    stats.packetsLost > 0 -> Color(0xFFFF5252)
-                    stats.packetsRecovered > 0 -> Color(0xFFFFC107)
-                    else -> Color(0xFF9E9E9E)
-                },
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-            )
+            // the link is degrading before the picture does. There is no FEC
+            // under APFPV, so a permanent "fec 0 lost 0" would be reporting on
+            // machinery that is not running.
+            if (radioLink) {
+                Text(
+                    text = "fec ${stats.packetsRecovered}  lost ${stats.packetsLost}" +
+                        if (stats.fecK > 0) "  ${stats.fecK}/${stats.fecN}" else "",
+                    color = when {
+                        stats.packetsLost > 0 -> Color(0xFFFF5252)
+                        stats.packetsRecovered > 0 -> Color(0xFFFFC107)
+                        else -> Color(0xFF9E9E9E)
+                    },
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                )
+            }
 
             // "DVR status".
             if (recording) {
@@ -167,8 +171,10 @@ fun InGoggleOsd(
                 )
             }
 
-            // "SignalWarning".
-            if (stats.isLive && stats.bestRssi <= -80) {
+            // "SignalWarning". Radio only: APFPV never measures RSSI, so
+            // bestRssi sits at its -105 default and this would warn about a
+            // weak signal on every APFPV flight, however strong the Wi-Fi is.
+            if (radioLink && stats.isLive && stats.bestRssi <= -80) {
                 Text(
                     text = "WEAK SIGNAL",
                     color = Color(0xFFFFC107),

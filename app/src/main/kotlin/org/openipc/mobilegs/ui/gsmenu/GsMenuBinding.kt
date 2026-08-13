@@ -39,6 +39,7 @@ object GsMenuBinding {
         "gs app udp_port" -> settings.udpVideoPort.toString()
         "gs app osd" -> settings.osdEnabled.onOff()
         "gs app top_osd" -> settings.topOsdEnabled.onOff()
+        "gs app video_fit" -> settings.videoFit
         "gs app no_signal" -> settings.noSignalStyle
         "gs app strip_flight_time" -> settings.stripFlightTime.onOff()
         "gs app strip_craft_battery" -> settings.stripCraftBattery.onOff()
@@ -96,6 +97,7 @@ object GsMenuBinding {
         "gs app udp_port" -> value.toIntOrNull()?.let { settings.copy(udpVideoPort = it) }
         "gs app osd" -> settings.copy(osdEnabled = value.isOn())
         "gs app top_osd" -> settings.copy(topOsdEnabled = value.isOn())
+        "gs app video_fit" -> settings.copy(videoFit = value)
         "gs app no_signal" -> settings.copy(noSignalStyle = value)
         "gs app strip_flight_time" -> settings.copy(stripFlightTime = value.isOn())
         "gs app strip_craft_battery" -> settings.copy(stripCraftBattery = value.isOn())

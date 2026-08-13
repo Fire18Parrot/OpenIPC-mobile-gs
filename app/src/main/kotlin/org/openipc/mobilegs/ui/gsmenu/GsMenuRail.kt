@@ -90,6 +90,7 @@ object GsRails {
                 // are display settings, so this is where they belong.
                 "gs app osd",
                 "gs app top_osd",
+                "gs app video_fit",
                 "gs app no_signal",
                 "gs app strip_flight_time",
                 "gs app strip_craft_battery",

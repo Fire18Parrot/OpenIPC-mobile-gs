@@ -7,10 +7,12 @@ import android.view.SurfaceView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -175,21 +177,42 @@ private fun FlightScreen(
     // never established and its counters never move however good the video is.
     val hasPicture by service.hasPicture.collectAsState()
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    // BoxWithConstraints rather than Box: fitting the video needs the screen's
+    // own aspect, and this is where it is known.
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // A SurfaceView, not a TextureView: it hands MediaCodec a buffer queue
         // the compositor consumes directly, which is both lower latency and
         // lower power than routing frames through the view hierarchy.
         //
-        // Sized to the stream's own aspect rather than the screen's. Filling a
-        // 20:9 phone with a 16:9 picture would stretch it; this gives the video
-        // every pixel it can honestly use and leaves the rest black.
+        // Sized to the stream's own aspect rather than the screen's, and fitted
+        // inside the screen rather than across it. Filling the width alone is
+        // not enough: a 16:9 picture across a 20:9 phone is 1350 px tall on a
+        // 1080 px screen, so a fifth of the frame is cropped away above and
+        // below - which costs a pilot exactly the part of the picture they were
+        // looking at. Whichever axis runs out first is the one that fills; the
+        // other letterboxes.
         val aspect = if (videoSize.second > 0) {
             videoSize.first.toFloat() / videoSize.second.toFloat()
         } else {
             16f / 9f
         }
+        val screenAspect = if (maxHeight.value > 0f && maxHeight.value.isFinite()) {
+            maxWidth / maxHeight
+        } else {
+            aspect
+        }
+        // "fill" is the other honest option, and the one goggles offer: keep
+        // the aspect but oversize until there are no bars, accepting that the
+        // edges go off-screen. Never a stretch - a distorted horizon is worse
+        // than either.
+        val fillScreen = settings.videoFit == "fill"
+        val videoModifier = if ((aspect >= screenAspect) != fillScreen) {
+            Modifier.fillMaxWidth().aspectRatio(aspect)
+        } else {
+            Modifier.fillMaxHeight().aspectRatio(aspect)
+        }
         AndroidView(
-            modifier = Modifier.fillMaxWidth().aspectRatio(aspect),
+            modifier = videoModifier,
             factory = { context ->
                 SurfaceView(context).apply {
                     holder.addCallback(object : SurfaceHolder.Callback {

@@ -216,6 +216,11 @@ object GsMenu {
                             "The osd.json panel at the top right.",
                         ),
                         GsMenuItem(
+                            "gs app video_fit", "Picture size",
+                            GsMenuValue.Choice(listOf("fit", "fill")),
+                            "Fit shows the whole frame; fill uses the whole screen.",
+                        ),
+                        GsMenuItem(
                             "gs app no_signal", "No-signal background",
                             GsMenuValue.Choice(listOf("drift", "black", "grey")),
                             "Drift moves a soft gradient so an OLED cannot stain.",
