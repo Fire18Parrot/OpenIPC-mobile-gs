@@ -26,7 +26,9 @@ import org.openipc.gslib.Telemetry
 import org.openipc.gslib.VideoCodec
 import org.openipc.mobilegs.MainActivity
 import org.openipc.mobilegs.R
+import org.openipc.mobilegs.diag.DiagnosticsLog
 import org.openipc.mobilegs.dvr.VideoRecorder
+import org.openipc.mobilegs.net.WifiLink
 import org.openipc.mobilegs.settings.Settings
 import org.openipc.mobilegs.video.VideoDecoder
 
@@ -49,9 +51,14 @@ class GroundStationService : Service(), GroundStationListener {
     private var station: NativeGroundStation? = null
     private val decoder = VideoDecoder()
     private val recorder = VideoRecorder()
+    private val wifiLink by lazy { WifiLink(this) }
     private var wakeLock: PowerManager.WakeLock? = null
     private var surface: Surface? = null
     private var pendingCodec: VideoCodec = VideoCodec.AUTO
+
+    /** What the decoder is currently configured for, as opposed to requested. */
+    private var activeCodec: VideoCodec = VideoCodec.AUTO
+    private var isForeground = false
 
     private val _linkStats = MutableStateFlow(LinkStats())
     val linkStats: StateFlow<LinkStats> = _linkStats
@@ -68,16 +75,78 @@ class GroundStationService : Service(), GroundStationListener {
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running
 
+    /** The stream's pixel size, so the view can keep its aspect ratio. */
+    private val _videoSize = MutableStateFlow(16 to 9)
+    val videoSize: StateFlow<Pair<Int, Int>> = _videoSize
+
+    /** Decoded frames per second, for the OSD's video widget. */
+    private val _videoFps = MutableStateFlow(0)
+    val videoFps: StateFlow<Int> = _videoFps
+
+    /**
+     * Whether there is actually a picture on the surface.
+     *
+     * Taken from the decoder's own frame count rather than from link state,
+     * because link state does not mean the same thing in both modes: APFPV has
+     * no wfb receiver at all, so its session is never "established" and its
+     * packet counters never move, however well the video is arriving. The one
+     * question the flight view needs answered - is anything being drawn - is
+     * the one the decoder can answer in either mode.
+     */
+    private val _hasPicture = MutableStateFlow(false)
+    val hasPicture: StateFlow<Boolean> = _hasPicture
+
+    private var lastDecodedAtMs = 0L
+    private var lastDecodedCount = 0L
+
+    /**
+     * When the link first came up, as an uptime clock, or 0 while it is down.
+     * SystemClock rather than wall time: this is a duration, and a clock change
+     * mid-flight must not make it jump.
+     */
+    private val _linkUpSinceMs = MutableStateFlow(0L)
+    val linkUpSinceMs: StateFlow<Long> = _linkUpSinceMs
+
+    private var lastFrameCount = 0L
+    private var lastFpsAtMs = 0L
+
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        decoder.onVideoSize = { width, height ->
+            _videoSize.value = width to height
+            DiagnosticsLog.append("video is ${width}x$height")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification("Starting"))
+        // Deliberately not promoted to the foreground here. From Android 14 a
+        // connectedDevice foreground service may only start while the app holds
+        // a qualifying prerequisite - USB device permission, or one of the
+        // network/Bluetooth permissions - and at this point we may hold none of
+        // them. Promotion happens in startGroundStation(), by which time the
+        // user has granted access to the adapter (or we are in APFPV mode,
+        // covered by the Wi-Fi state permissions).
         return START_STICKY
+    }
+
+    /**
+     * Promote to a foreground service so receiving survives the screen going
+     * off. Refusal is not fatal: the ground station keeps running as an ordinary
+     * bound service for as long as the activity is up, which is worth far more
+     * to the user than a crash.
+     */
+    private fun promoteToForeground(text: String) {
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(text))
+            isForeground = true
+        } catch (e: Exception) {
+            Log.w(TAG, "could not run in the foreground: ${e.message}")
+            DiagnosticsLog.append("foreground refused: ${e.message}")
+            isForeground = false
+        }
     }
 
     override fun onDestroy() {
@@ -93,7 +162,10 @@ class GroundStationService : Service(), GroundStationListener {
         this.surface = surface
         pendingCodec = codec
         if (surface != null && _running.value) {
-            decoder.start(surface, codec)
+            val effective = _linkStats.value.detectedCodec.takeIf { it != VideoCodec.AUTO }
+                ?: codec
+            activeCodec = effective
+            decoder.start(surface, effective)
         } else if (surface == null) {
             decoder.stop()
         }
@@ -101,6 +173,14 @@ class GroundStationService : Service(), GroundStationListener {
 
     fun startGroundStation(settings: Settings, usbFd: Int, keyPath: String): Boolean {
         if (_running.value) return true
+
+        // APFPV rides the air unit's own access point, which has no internet
+        // behind it. Android will happily leave the default route on mobile
+        // data, and our socket then listens on an interface the drone cannot
+        // reach - so claim the Wi-Fi before opening anything.
+        if (settings.source == SourceKind.UDP) {
+            wifiLink.bind { message -> onStatus(message) }
+        }
 
         val instance = NativeGroundStation()
         station = instance
@@ -116,19 +196,24 @@ class GroundStationService : Service(), GroundStationListener {
         )
 
         if (!started) {
+            DiagnosticsLog.append("start failed: ${instance.lastError}")
             _status.value = instance.lastError.ifEmpty { "could not start the ground station" }
             instance.close()
             station = null
+            wifiLink.release()
             return false
         }
 
         _running.value = true
         acquireWakeLock()
-        surface?.let { decoder.start(it, settings.codec) }
+        surface?.let {
+            activeCodec = settings.codec
+            decoder.start(it, settings.codec)
+        }
         if (settings.recordVideo) {
             recorder.start(this, settings.codec)
         }
-        updateNotification("Receiving")
+        promoteToForeground("Receiving")
         return true
     }
 
@@ -139,7 +224,22 @@ class GroundStationService : Service(), GroundStationListener {
         station?.close()
         station = null
         _running.value = false
+        _linkUpSinceMs.value = 0L
+        _hasPicture.value = false
+        _videoFps.value = 0
+        lastDecodedCount = 0
+        lastDecodedAtMs = 0
+        lastFrameCount = 0
+        lastFpsAtMs = 0
+        // Process-wide, so it must not outlive the link: a GCS endpoint on the
+        // ordinary network would be unreachable while it is held.
+        wifiLink.release()
         releaseWakeLock()
+        if (isForeground) {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+            isForeground = false
+        }
         _status.value = "stopped"
     }
 
@@ -186,10 +286,56 @@ class GroundStationService : Service(), GroundStationListener {
     override fun onStats(stats: LinkStats, telemetry: Telemetry) {
         _linkStats.value = stats
         _telemetry.value = telemetry
+
+        // Start the flight clock the moment the link is genuinely up, not when
+        // the user pressed Start: what a pilot wants timed is the flight.
+        if (stats.isLive && _linkUpSinceMs.value == 0L) {
+            _linkUpSinceMs.value = android.os.SystemClock.elapsedRealtime()
+        }
+
+        // The decoder cannot infer the codec: fed an H.265 stream it never sees
+        // a keyframe, so it stays silent while data pours in. The depacketiser
+        // knows what is actually on the wire, so follow it.
+        val detected = stats.detectedCodec
+        if (detected != VideoCodec.AUTO && detected != activeCodec) {
+            val target = surface
+            if (target != null) {
+                DiagnosticsLog.append("video is $detected - restarting the decoder")
+                activeCodec = detected
+                decoder.start(target, detected)
+            }
+        }
+
+        // Stats arrive every 100 ms; frames are counted over a whole second so
+        // the number on screen is steady enough to read in flight.
+        val now = System.currentTimeMillis()
+        val decoded = decoder.decodedFrames
+
+        // Whether a picture exists, at the 100 ms stats cadence rather than the
+        // one-second fps cadence, so the no-signal fill lifts as soon as the
+        // first frame lands instead of up to a second later. Dropping it takes
+        // a moment's grace: a single late frame is not a lost link.
+        if (decoded != lastDecodedCount) {
+            lastDecodedCount = decoded
+            lastDecodedAtMs = now
+            _hasPicture.value = true
+        } else if (_hasPicture.value && now - lastDecodedAtMs > PICTURE_GRACE_MS) {
+            _hasPicture.value = false
+        }
+
+        if (lastFpsAtMs == 0L) {
+            lastFpsAtMs = now
+            lastFrameCount = decoded
+        } else if (now - lastFpsAtMs >= 1000) {
+            _videoFps.value = (decoded - lastFrameCount).toInt()
+            lastFrameCount = decoded
+            lastFpsAtMs = now
+        }
     }
 
     override fun onStatus(message: String) {
         Log.i(TAG, message)
+        DiagnosticsLog.append(message)
         _status.value = message
     }
 
@@ -232,6 +378,7 @@ class GroundStationService : Service(), GroundStationListener {
     }
 
     private fun updateNotification(text: String) {
+        if (!isForeground) return
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .notify(NOTIFICATION_ID, buildNotification(text))
     }
@@ -253,13 +400,18 @@ class GroundStationService : Service(), GroundStationListener {
         private const val CHANNEL_ID = "ground_station"
         private const val NOTIFICATION_ID = 1
 
+        /** How long the picture may stall before the no-signal fill returns. */
+        private const val PICTURE_GRACE_MS = 1500L
+
+        /**
+         * Start the service so it outlives the activity that bound it. Plain
+         * startService, not startForegroundService: the service promotes itself
+         * once the link is up and it holds a prerequisite the platform accepts.
+         * Called from a user-visible action, so background-start limits do not
+         * apply.
+         */
         fun start(context: Context) {
-            val intent = Intent(context, GroundStationService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startService(Intent(context, GroundStationService::class.java))
         }
     }
 }

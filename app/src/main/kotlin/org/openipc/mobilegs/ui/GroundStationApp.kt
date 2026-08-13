@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package org.openipc.mobilegs.ui
 
+import android.os.SystemClock
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,11 +38,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import java.io.File
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.openipc.gslib.Bandwidth
@@ -47,6 +54,8 @@ import org.openipc.gslib.NativeGroundStation
 import org.openipc.gslib.SourceKind
 import org.openipc.gslib.Telemetry
 import org.openipc.gslib.VideoCodec
+import org.openipc.mobilegs.diag.CrashReporter
+import org.openipc.mobilegs.ui.gsmenu.GsMenuScreen
 import org.openipc.mobilegs.service.GroundStationService
 import org.openipc.mobilegs.settings.Settings
 import org.openipc.mobilegs.settings.SettingsRepository
@@ -69,6 +78,24 @@ fun GroundStationApp(
         val service by serviceFlow.collectAsState()
         val settings by settingsRepository.settings.collectAsState(initial = Settings())
         var showSettings by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        val context = LocalContext.current
+        // If the last run died, show the report rather than making the user go
+        // looking for it.
+        var showDiagnostics by remember {
+            mutableStateOf(CrashReporter.lastCrash(context) != null)
+        }
+
+        // The menu's Status panel needs live link state. Collected here rather
+        // than at the call site because a composable may not be invoked from
+        // inside a safe-call chain, and the service is nullable until bound.
+        var menuStats by remember { mutableStateOf(LinkStats()) }
+        var menuFps by remember { mutableStateOf(0) }
+        LaunchedEffect(service) {
+            val active = service ?: return@LaunchedEffect
+            launch { active.linkStats.collect { menuStats = it } }
+            launch { active.videoFps.collect { menuFps = it } }
+        }
 
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             FlightScreen(
@@ -80,13 +107,25 @@ fun GroundStationApp(
             )
 
             if (showSettings) {
-                SettingsScreen(
+                GsMenuScreen(
                     settings = settings,
-                    settingsRepository = settingsRepository,
-                    service = service,
-                    keyFile = keyFile,
+                    stats = menuStats,
+                    videoFps = menuFps,
+                    keyStatus = keyStatus(keyFile),
+                    onChange = { updated ->
+                        scope.launch { settingsRepository.update { updated } }
+                        service?.applySettings(updated)
+                    },
+                    onOpenDiagnostics = {
+                        showSettings = false
+                        showDiagnostics = true
+                    },
                     onDismiss = { showSettings = false },
                 )
+            }
+
+            if (showDiagnostics) {
+                DiagnosticsScreen(onDismiss = { showDiagnostics = false })
             }
         }
     }
@@ -114,13 +153,66 @@ private fun FlightScreen(
     val osd by service.osd.collectAsState()
     val status by service.status.collectAsState()
     val running by service.running.collectAsState()
+    val fps by service.videoFps.collectAsState()
+    val videoSize by service.videoSize.collectAsState()
+    val linkUpSince by service.linkUpSinceMs.collectAsState()
 
-    Box(Modifier.fillMaxSize()) {
+    // The flight clock, ticked here rather than in the service: it is a
+    // presentation concern, and one recomposition a second is nothing.
+    var flightSeconds by remember { mutableStateOf(0L) }
+    LaunchedEffect(linkUpSince) {
+        if (linkUpSince == 0L) {
+            flightSeconds = 0L
+            return@LaunchedEffect
+        }
+        while (true) {
+            flightSeconds = (SystemClock.elapsedRealtime() - linkUpSince) / 1000
+            delay(1000)
+        }
+    }
+
+    // Whether anything is being drawn, decided by the decoder rather than by
+    // link state. Link state answers a different question, and in APFPV it
+    // answers nothing at all: that mode has no wfb receiver, so its session is
+    // never established and its counters never move however good the video is.
+    val hasPicture by service.hasPicture.collectAsState()
+
+    // BoxWithConstraints rather than Box: fitting the video needs the screen's
+    // own aspect, and this is where it is known.
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // A SurfaceView, not a TextureView: it hands MediaCodec a buffer queue
         // the compositor consumes directly, which is both lower latency and
         // lower power than routing frames through the view hierarchy.
+        //
+        // Sized to the stream's own aspect rather than the screen's, and fitted
+        // inside the screen rather than across it. Filling the width alone is
+        // not enough: a 16:9 picture across a 20:9 phone is 1350 px tall on a
+        // 1080 px screen, so a fifth of the frame is cropped away above and
+        // below - which costs a pilot exactly the part of the picture they were
+        // looking at. Whichever axis runs out first is the one that fills; the
+        // other letterboxes.
+        val aspect = if (videoSize.second > 0) {
+            videoSize.first.toFloat() / videoSize.second.toFloat()
+        } else {
+            16f / 9f
+        }
+        val screenAspect = if (maxHeight.value > 0f && maxHeight.value.isFinite()) {
+            maxWidth / maxHeight
+        } else {
+            aspect
+        }
+        // "fill" is the other honest option, and the one goggles offer: keep
+        // the aspect but oversize until there are no bars, accepting that the
+        // edges go off-screen. Never a stretch - a distorted horizon is worse
+        // than either.
+        val fillScreen = settings.videoFit == "fill"
+        val videoModifier = if ((aspect >= screenAspect) != fillScreen) {
+            Modifier.fillMaxWidth().aspectRatio(aspect)
+        } else {
+            Modifier.fillMaxHeight().aspectRatio(aspect)
+        }
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = videoModifier,
             factory = { context ->
                 SurfaceView(context).apply {
                     holder.addCallback(object : SurfaceHolder.Callback {
@@ -143,21 +235,71 @@ private fun FlightScreen(
             },
         )
 
+        // Over the SurfaceView rather than behind it: an idle SurfaceView is an
+        // opaque black hole punched through the window, so anything drawn under
+        // it is invisible. A ground station spends most of its life on this
+        // screen, and an OLED panel keeps whatever sits still on it - hence the
+        // moving default. Removed the instant video returns.
+        if (!hasPicture) {
+            NoSignalBackground(settings.noSignalStyle, Modifier.fillMaxSize())
+        }
+
         if (settings.osdEnabled) {
             osd?.let { OsdOverlay(it, Modifier.fillMaxSize()) }
         }
 
-        LinkHud(
+        // Upstream places the metrics box at the top right (x = -270 in
+        // osd.json), so it goes there. Switchable off: with the strip carrying
+        // the link state, some pilots would rather have the top of the picture
+        // clear for the air unit's own OSD.
+        if (settings.topOsdEnabled) {
+            InGoggleOsd(
+                stats = stats,
+                // Show what is on the wire, not what was asked for: "auto"
+                // tells a pilot nothing, and the difference is what a black
+                // screen means.
+                codec = stats.detectedCodec.takeIf { it != VideoCodec.AUTO }
+                    ?.name?.lowercase() ?: "no video",
+                fps = fps,
+                recording = service.isRecording,
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                radioLink = settings.source != SourceKind.UDP,
+            )
+        }
+
+        // Bottom right, where the goggles put their numbers. Which of them
+        // appear is set per element in the menu, under Camera.
+        StatusStrip(
             stats = stats,
             telemetry = telemetry,
-            status = status,
-            running = running,
+            settings = settings,
+            fps = fps,
+            flightSeconds = flightSeconds,
             recording = service.isRecording,
-            onOpenSettings = onOpenSettings,
-            onToggle = { if (running) onStop() else onStart() },
-            onToggleRecording = { service.toggleRecording(settings.codec) },
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+            modifier = Modifier.align(Alignment.BottomEnd),
         )
+
+        // The SBC opens its menu with a goggle button; a phone needs something
+        // to touch, so these sit out of the way at the bottom.
+        Row(
+            modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { if (running) onStop() else onStart() }) {
+                Text(if (running) "Stop" else "Start")
+            }
+            TextButton(onClick = { service.toggleRecording(settings.codec) }) {
+                Text(if (service.isRecording) "Stop REC" else "Record")
+            }
+            TextButton(onClick = onOpenSettings) { Text("Menu") }
+            Text(
+                text = status,
+                color = Color(0xFF90A4AE),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+            )
+        }
     }
 }
 
@@ -172,285 +314,12 @@ private fun EmptyState(onOpenSettings: () -> Unit) {
 }
 
 /**
- * The link readout. This is the equivalent of what wfb-cli shows on an SBC:
- * signal, FEC behaviour and whether the session is actually up.
+ * gs.key state, shown in the menu footer. The SBC's in-goggle menu has no key
+ * entry - keys get there over SSH or on the SD card - but on a phone this is
+ * the only place to see whether the ground station can decrypt at all.
  */
-@Composable
-private fun LinkHud(
-    stats: LinkStats,
-    telemetry: Telemetry,
-    status: String,
-    running: Boolean,
-    recording: Boolean,
-    onOpenSettings: () -> Unit,
-    onToggle: () -> Unit,
-    onToggleRecording: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(modifier) {
-        Column(Modifier.padding(10.dp)) {
-            val linkColour = when {
-                !stats.sessionEstablished -> Color(0xFFFF5252)
-                stats.packetsLost > 0 -> Color(0xFFFFC107)
-                else -> Color(0xFF4CAF50)
-            }
-            Text(
-                text = if (stats.sessionEstablished) "LINK UP" else "NO LINK",
-                color = linkColour,
-                fontFamily = FontFamily.Monospace,
-            )
-            Text(
-                text = "RSSI ${stats.bestRssi} dBm   SNR ${stats.bestSnr} dB   ant ${stats.antennas}",
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            Text(
-                text = "pkt ${stats.packetsAll}  lost ${stats.packetsLost}  fec ${stats.packetsRecovered}",
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            if (stats.fecK > 0) {
-                Text(
-                    text = "FEC ${stats.fecK}/${stats.fecN}",
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                )
-            }
-            if (telemetry.batteryVolts > 0f) {
-                Text(
-                    text = "BAT %.1fV  ALT %.0fm  SPD %.0fm/s  SAT %d".format(
-                        telemetry.batteryVolts,
-                        telemetry.relativeAltitudeM,
-                        telemetry.groundSpeedMs,
-                        telemetry.satellites,
-                    ),
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                )
-            }
-            Text(status, color = Color(0xFFB0BEC5), fontSize = 11.sp)
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onToggle) { Text(if (running) "Stop" else "Start") }
-                TextButton(onClick = onToggleRecording) {
-                    Text(if (recording) "Stop REC" else "Record")
-                }
-                TextButton(onClick = onOpenSettings) { Text("Settings") }
-            }
-        }
-    }
-}
-
-/**
- * The settings, standing in for the web UI an SBC ground station serves on port
- * 5000 - reachable here without a second device.
- */
-@Composable
-private fun SettingsScreen(
-    settings: Settings,
-    settingsRepository: SettingsRepository,
-    service: GroundStationService?,
-    keyFile: File,
-    onDismiss: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    fun edit(transform: (Settings) -> Settings) {
-        scope.launch {
-            settingsRepository.update(transform)
-            service?.applySettings(transform(settings))
-        }
-    }
-
-    Box(Modifier.fillMaxSize().background(Color(0xF007090B))) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text("Ground station settings", color = Color.White)
-
-            SectionTitle("Link")
-            EnumRow(
-                label = "Source",
-                current = settings.source.name,
-                options = SourceKind.entries.map { it.name },
-            ) { index -> edit { it.copy(source = SourceKind.entries[index]) } }
-
-            if (settings.source == SourceKind.DEVOURER) {
-                NumberRow("Channel", settings.channel) { value ->
-                    edit { it.copy(channel = value) }
-                    service?.setChannel(value, settings.bandwidth.mhz)
-                }
-                EnumRow(
-                    label = "Bandwidth",
-                    current = "${settings.bandwidth.mhz} MHz",
-                    options = Bandwidth.entries.map { "${it.mhz} MHz" },
-                ) { index -> edit { it.copy(bandwidth = Bandwidth.entries[index]) } }
-                NumberRow("Link ID", settings.linkId) { value -> edit { it.copy(linkId = value) } }
-
-                val keyState = if (keyFile.exists()) {
-                    NativeGroundStation.validateKey(keyFile.absolutePath) ?: "gs.key loaded"
-                } else {
-                    "no gs.key - import one from your air unit"
-                }
-                Text(keyState, color = Color(0xFFB0BEC5), fontSize = 12.sp)
-            } else {
-                NumberRow("Video UDP port", settings.udpVideoPort) { value ->
-                    edit { it.copy(udpVideoPort = value) }
-                }
-            }
-
-            EnumRow(
-                label = "Codec",
-                current = settings.codec.name,
-                options = VideoCodec.entries.map { it.name },
-            ) { index -> edit { it.copy(codec = VideoCodec.entries[index]) } }
-
-            SectionTitle("MAVLink")
-            Text(
-                "Attach a ground control station to the telemetry stream. " +
-                    "UDP_OUT sends to a fixed address, UDP_SERVER and TCP_SERVER wait " +
-                    "for the GCS to connect.",
-                color = Color(0xFF90A4AE),
-                fontSize = 11.sp,
-            )
-            SwitchRow("Enabled", settings.mavlinkEnabled) { value ->
-                edit { it.copy(mavlinkEnabled = value) }
-            }
-            EnumRow(
-                label = "Transport",
-                current = settings.mavlinkKind.name,
-                options = MavlinkEndpointKind.entries.map { it.name },
-            ) { index -> edit { it.copy(mavlinkKind = MavlinkEndpointKind.entries[index]) } }
-            TextRow("Host", settings.mavlinkHost) { value -> edit { it.copy(mavlinkHost = value) } }
-            NumberRow("Port", settings.mavlinkPort) { value -> edit { it.copy(mavlinkPort = value) } }
-            SwitchRow("Allow uplink from GCS", settings.mavlinkUplink) { value ->
-                edit { it.copy(mavlinkUplink = value) }
-            }
-
-            SwitchRow("Second endpoint", settings.secondEndpointEnabled) { value ->
-                edit { it.copy(secondEndpointEnabled = value) }
-            }
-            if (settings.secondEndpointEnabled) {
-                EnumRow(
-                    label = "Second transport",
-                    current = settings.secondEndpointKind.name,
-                    options = MavlinkEndpointKind.entries.map { it.name },
-                ) { index ->
-                    edit { it.copy(secondEndpointKind = MavlinkEndpointKind.entries[index]) }
-                }
-                NumberRow("Second port", settings.secondEndpointPort) { value ->
-                    edit { it.copy(secondEndpointPort = value) }
-                }
-            }
-
-            SectionTitle("Adaptive link")
-            SwitchRow("Enabled", settings.alinkEnabled) { value ->
-                edit { it.copy(alinkEnabled = value) }
-            }
-            if (settings.alinkEnabled) {
-                TextRow("Air unit address", settings.alinkHost) { value ->
-                    edit { it.copy(alinkHost = value) }
-                }
-                NumberRow("Port", settings.alinkPort) { value -> edit { it.copy(alinkPort = value) } }
-                SwitchRow("Request keyframes on loss", settings.alinkAllowIdr) { value ->
-                    edit { it.copy(alinkAllowIdr = value) }
-                }
-                SwitchRow("Apply noise penalty", settings.alinkAllowPenalty) { value ->
-                    edit { it.copy(alinkAllowPenalty = value) }
-                }
-                SwitchRow("Allow FEC increase", settings.alinkAllowFecIncrease) { value ->
-                    edit { it.copy(alinkAllowFecIncrease = value) }
-                }
-            }
-
-            SectionTitle("Display and recording")
-            SwitchRow("Show OSD", settings.osdEnabled) { value -> edit { it.copy(osdEnabled = value) } }
-            SwitchRow("Record on start", settings.recordVideo) { value ->
-                edit { it.copy(recordVideo = value) }
-            }
-
-            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Close") }
-        }
-    }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, color = Color(0xFFFF7A00), modifier = Modifier.padding(top = 8.dp))
-}
-
-@Composable
-private fun SwitchRow(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = Color.White)
-        Switch(checked = value, onCheckedChange = onChange)
-    }
-}
-
-@Composable
-private fun TextRow(label: String, value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        label = { Text(label) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-@Composable
-private fun NumberRow(label: String, value: Int, onChange: (Int) -> Unit) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { entered ->
-            text = entered.filter { it.isDigit() }
-            text.toIntOrNull()?.let(onChange)
-        },
-        label = { Text(label) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-@Composable
-private fun EnumRow(
-    label: String,
-    current: String,
-    options: List<String>,
-    onSelect: (Int) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = Color.White)
-        Box {
-            TextButton(onClick = { expanded = true }) { Text(current) }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                options.forEachIndexed { index, option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = {
-                            expanded = false
-                            onSelect(index)
-                        },
-                    )
-                }
-            }
-        }
-    }
+private fun keyStatus(keyFile: File): String = when {
+    !keyFile.exists() -> "gs.key missing - copy one from your air unit"
+    else -> NativeGroundStation.validateKey(keyFile.absolutePath)?.let { "gs.key invalid: $it" }
+        ?: "gs.key loaded"
 }

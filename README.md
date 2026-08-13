@@ -7,9 +7,26 @@ ground station — no single-board computer, no SD card to flash, no root, and n
 second device to open a web UI on.
 
 It is the same idea as [PixelPilot](https://github.com/OpenIPC/PixelPilot), taken
-further: the SBC's adaptive-link, msposd and settings UI come along too, and the
-telemetry stream is exposed on real endpoints so an external ground control
-station can attach.
+further: the SBC's adaptive-link and msposd come along too, the in-goggle menu
+and OSD are ported rather than reinvented, and the telemetry stream is exposed
+on real endpoints so an external ground control station can attach.
+
+## The in-goggle UI
+
+The menu is a transcription of `gsmenu.sh` from the sbc-groundstations
+`pixelpilot` package — the same targets (GS / Air), sections (WFB-NG, System,
+APFPV, WiFi), item names, ordering and value lists, with upstream's
+`<target> <section> <item>` path shown on every row so it can be matched against
+the script. Items a phone cannot serve — the HDMI connector, DVR re-encoding,
+the SBC's own Wi-Fi and audio plumbing — stay listed and greyed with the reason,
+because dropping them would make it a different menu from the one you already
+know.
+
+The OSD is the widget set from `osd.json`: the translucent metrics box at the
+top right, per-antenna signal, video format and codec, link throughput, DVR
+state and the signal warnings. The RSSI bands are upstream's own — `signal1`
+above -40 dBm, eight dB per band below — so the bars mean what they mean in
+goggles. They are drawn rather than blitted, so no copied PNG assets ship here.
 
 ## What replaced what
 
@@ -19,8 +36,10 @@ station can attach.
 | `wifibroadcast-ng` (`wfb_rx`, `wfb_tx`, `gs.sh`) | wfb-ng's own `Aggregator`, compiled in and subclassed so payload arrives by callback |
 | `pixelpilot` (Rockchip MPP + DRM player) | `MediaCodec` low-latency decode onto a `SurfaceView` |
 | `msposd` | MSP DisplayPort decoder plus a Compose font-atlas renderer |
+| `pixelpilot` in-goggle menu (`gsmenu.sh`) | Ported menu tree, drawn as the same two-column overlay |
+| `pixelpilot` OSD (`osd.json`) | Ported widget set: per-antenna signal, video format, throughput, DVR state |
 | `adaptive-link` (`alink_gs`) | Ported to C++, byte-compatible with `alink_drone` |
-| `wfb-server`, `dvrui` (web UI on `:5000`) | Compose settings and DVR screens, on the device itself |
+| `wfb-server`, `dvrui` (web UI on `:5000`) | Not ported - the in-goggle menu is the UI, and a phone needs no second device |
 | `yaml-cli`, `yq` (`wifibroadcast.cfg`, `gs.key`) | DataStore settings, plus `gs.key` import and key-pair generation |
 
 ## How it fits together
@@ -116,13 +135,18 @@ arriving.
 
 ## Status
 
-Test-verified here: the portable engine — wfb receive path, adaptive-link
-scoring and wire format, RTP depacketising, MSP decoding, MAVLink framing and
-endpoint routing. 213 checks across 5 suites.
+**Test-verified.** The portable engine: wfb receive path, adaptive-link scoring
+and wire format, RTP depacketising, MSP decoding, MAVLink framing and endpoint
+routing. 213 checks across 5 suites, green locally and in CI.
 
-Compile-verified by CI only: the Android layer — JNI, the devourer and libusb
-integration, Compose UI, MediaCodec and the DVR. On-air behaviour needs real
-hardware; reports from a field test are welcome.
+**Build-verified.** The debug APK builds in CI for `arm64-v8a` and
+`armeabi-v7a`, with devourer, wfb-ng, libusb and libsodium all compiled from
+source. Grab it from the artifacts of the latest `android` workflow run.
+
+**Not yet verified.** Nothing has been on the air. Runtime behaviour — whether
+an adapter enumerates and claims, whether the chip brings up, whether video
+actually decodes end to end — needs hardware. Reports from a field test are
+very welcome, and are the next thing this needs.
 
 ## Licence
 

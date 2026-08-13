@@ -11,10 +11,16 @@
     <!-- MAVLink endpoints and the APFPV video socket. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Also the prerequisite that lets a connectedDevice foreground service
+         start in APFPV mode, where there is no USB device to hold permission
+         for. -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <application
+        android:name=".GsApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"

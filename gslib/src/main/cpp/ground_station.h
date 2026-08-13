@@ -66,6 +66,13 @@ public:
     bool SetChannel(int channel, Bandwidth bandwidth);
 
     LinkSnapshot link_stats() const { return stats_.Get(); }
+
+    /**
+     * What the RTP depacketiser found on the wire. The decoder cannot guess
+     * this for itself: an H.265 stream fed to an H.264 decoder never yields a
+     * keyframe, so playback stays black with data flowing.
+     */
+    VideoCodec detected_codec() const { return depacketizer_.codec(); }
     TelemetryState telemetry() const { return mavlink_.telemetry(); }
     std::string last_error() const;
 
@@ -91,6 +98,12 @@ private:
     // The video mirror, for users who want the stream in another app on the
     // phone the way the SBC pushes it to 127.0.0.1:5600.
     int mirror_fd_ = -1;
+
+    // Video payloads handed to the depacketiser, whatever the source. The only
+    // counter APFPV has: it runs no wfb receiver, so the link snapshot stays
+    // empty and cannot say whether anything is arriving.
+    std::atomic<uint64_t> video_payloads_{0};
+    std::atomic<uint64_t> video_bytes_{0};
 
     std::thread stats_thread_;
     std::atomic<bool> running_{false};

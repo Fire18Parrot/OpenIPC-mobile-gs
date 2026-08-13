@@ -27,4 +27,14 @@ if(OPENIPC_WITH_WFB)
     set_source_files_properties(${OPENIPC_THIRD_PARTY}/wfb-ng/src/tx.cpp
         PROPERTIES COMPILE_DEFINITIONS "main=wfb_tx_main_unused;WFB_VERSION=\"openipc-mobile-gs-test\"")
     add_test(NAME test_wfb_interop COMMAND test_wfb_interop)
+
+    # The RubyFPV spike. Note what this is NOT: upstream's licence carries a
+    # field-of-use restriction GPL-3 cannot absorb, so unlike the interop test
+    # above there is no upstream transmitter here to check ourselves against -
+    # both sides of this test are ours. It proves the reassembler is sound, not
+    # that the format was read correctly. A real capture is what settles that.
+    add_executable(test_ruby test_ruby.cpp)
+    target_link_libraries(test_ruby PRIVATE openipc_gs_core wfb_ng)
+    target_include_directories(test_ruby PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME test_ruby COMMAND test_ruby)
 endif()

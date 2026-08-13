@@ -134,6 +134,11 @@ class NativeGroundStation : AutoCloseable {
                 antennas = ints[STAT_ANTENNAS],
                 sessionEstablished = ints[STAT_SESSION] != 0,
                 bytesAll = ints[STAT_BYTES_ALL],
+                detectedCodec = when (ints[STAT_DETECTED_CODEC]) {
+                    1 -> VideoCodec.H264
+                    2 -> VideoCodec.H265
+                    else -> VideoCodec.AUTO
+                },
             )
             val telemetry = Telemetry(
                 armed = ints[STAT_ARMED] != 0,
@@ -225,6 +230,7 @@ class NativeGroundStation : AutoCloseable {
         private const val STAT_ARMED = 12
         private const val STAT_GPS_FIX = 13
         private const val STAT_SATELLITES = 14
+        private const val STAT_DETECTED_CODEC = 15
 
         private const val STAT_ROLL = 0
         private const val STAT_PITCH = 1

@@ -53,6 +53,39 @@ data class Settings(
 
     val recordVideo: Boolean = false,
     val osdEnabled: Boolean = true,
+
+    /**
+     * The ported osd.json metrics box at the top right. Off leaves the top of
+     * the picture clear for the air unit's own OSD, with the corner strip
+     * carrying the link state instead.
+     */
+    val topOsdEnabled: Boolean = true,
+
+    /**
+     * How the picture sits on a screen that is not its shape. `fit` shows the
+     * whole frame and leaves bars; `fill` uses the whole screen and lets the
+     * edges run off it. Never a stretch either way.
+     */
+    val videoFit: String = "fit",
+
+    // The corner strip, bottom right, where the goggles put their numbers.
+    // Each element is opt-in: what a pilot wants to see differs.
+    val stripBitrate: Boolean = true,
+    val stripSignal: Boolean = true,
+    val stripLinkBar: Boolean = true,
+    val stripFps: Boolean = false,
+    val stripCraftBattery: Boolean = true,
+    val stripPhoneBattery: Boolean = true,
+    val stripFlightTime: Boolean = true,
+    val stripRecording: Boolean = true,
+    val stripAltitude: Boolean = false,
+    val stripSpeed: Boolean = false,
+
+    /**
+     * What to show where there is no picture. OLED phones burn in, and a
+     * ground station spends a lot of its life parked on a static screen.
+     */
+    val noSignalStyle: String = "drift",
 ) {
     fun toGroundStationConfig(keyPath: String) = GroundStationConfig(
         source = source,
@@ -113,6 +146,19 @@ class SettingsRepository(private val context: Context) {
             alinkAllowFecIncrease = prefs[KEY_ALINK_FEC] ?: false,
             recordVideo = prefs[KEY_RECORD] ?: false,
             osdEnabled = prefs[KEY_OSD] ?: true,
+            topOsdEnabled = prefs[KEY_TOP_OSD] ?: true,
+            videoFit = prefs[KEY_VIDEO_FIT] ?: "fit",
+            stripBitrate = prefs[KEY_STRIP_BITRATE] ?: true,
+            stripSignal = prefs[KEY_STRIP_SIGNAL] ?: true,
+            stripLinkBar = prefs[KEY_STRIP_LINK_BAR] ?: true,
+            stripFps = prefs[KEY_STRIP_FPS] ?: false,
+            stripCraftBattery = prefs[KEY_STRIP_CRAFT_BATTERY] ?: true,
+            stripPhoneBattery = prefs[KEY_STRIP_PHONE_BATTERY] ?: true,
+            stripFlightTime = prefs[KEY_STRIP_FLIGHT_TIME] ?: true,
+            stripRecording = prefs[KEY_STRIP_RECORDING] ?: true,
+            stripAltitude = prefs[KEY_STRIP_ALTITUDE] ?: false,
+            stripSpeed = prefs[KEY_STRIP_SPEED] ?: false,
+            noSignalStyle = prefs[KEY_NO_SIGNAL] ?: "drift",
         )
     }
 
@@ -141,6 +187,19 @@ class SettingsRepository(private val context: Context) {
             prefs[KEY_ALINK_FEC] = next.alinkAllowFecIncrease
             prefs[KEY_RECORD] = next.recordVideo
             prefs[KEY_OSD] = next.osdEnabled
+            prefs[KEY_TOP_OSD] = next.topOsdEnabled
+            prefs[KEY_VIDEO_FIT] = next.videoFit
+            prefs[KEY_STRIP_BITRATE] = next.stripBitrate
+            prefs[KEY_STRIP_SIGNAL] = next.stripSignal
+            prefs[KEY_STRIP_LINK_BAR] = next.stripLinkBar
+            prefs[KEY_STRIP_FPS] = next.stripFps
+            prefs[KEY_STRIP_CRAFT_BATTERY] = next.stripCraftBattery
+            prefs[KEY_STRIP_PHONE_BATTERY] = next.stripPhoneBattery
+            prefs[KEY_STRIP_FLIGHT_TIME] = next.stripFlightTime
+            prefs[KEY_STRIP_RECORDING] = next.stripRecording
+            prefs[KEY_STRIP_ALTITUDE] = next.stripAltitude
+            prefs[KEY_STRIP_SPEED] = next.stripSpeed
+            prefs[KEY_NO_SIGNAL] = next.noSignalStyle
         }
     }
 
@@ -167,5 +226,18 @@ class SettingsRepository(private val context: Context) {
         val KEY_ALINK_FEC = booleanPreferencesKey("alink_fec")
         val KEY_RECORD = booleanPreferencesKey("record")
         val KEY_OSD = booleanPreferencesKey("osd")
+        val KEY_TOP_OSD = booleanPreferencesKey("top_osd")
+        val KEY_VIDEO_FIT = stringPreferencesKey("video_fit")
+        val KEY_STRIP_BITRATE = booleanPreferencesKey("strip_bitrate")
+        val KEY_STRIP_SIGNAL = booleanPreferencesKey("strip_signal")
+        val KEY_STRIP_LINK_BAR = booleanPreferencesKey("strip_link_bar")
+        val KEY_STRIP_FPS = booleanPreferencesKey("strip_fps")
+        val KEY_STRIP_CRAFT_BATTERY = booleanPreferencesKey("strip_craft_battery")
+        val KEY_STRIP_PHONE_BATTERY = booleanPreferencesKey("strip_phone_battery")
+        val KEY_STRIP_FLIGHT_TIME = booleanPreferencesKey("strip_flight_time")
+        val KEY_STRIP_RECORDING = booleanPreferencesKey("strip_recording")
+        val KEY_STRIP_ALTITUDE = booleanPreferencesKey("strip_altitude")
+        val KEY_STRIP_SPEED = booleanPreferencesKey("strip_speed")
+        val KEY_NO_SIGNAL = stringPreferencesKey("no_signal_style")
     }
 }

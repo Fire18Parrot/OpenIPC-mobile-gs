@@ -160,14 +160,35 @@ private:
                     return;
                 }
                 FrameMeta meta;
-                // devourer reports RSSI as an unsigned value in dBm magnitude;
-                // wfb-ng and the OSD both want it signed and negative.
-                meta.paths = 2;
+                // devourer hands over the raw PHY-status fields, not dBm. Its
+                // RxQuality.h documents the conversion: the RSSI byte is PWDB,
+                // so dBm = raw - 110, and the SNR byte is in half-dB steps.
+                //
+                // Getting this wrong is not just a cosmetic mislabel. The raw
+                // byte for a strong signal is around 100, and negating it reads
+                // as -100 dBm - a link on the edge of failing - which
+                // adaptive-link then reports to the air unit, and the air unit
+                // throttles its bitrate accordingly.
+                int paths = 0;
                 for (int i = 0; i < 2; ++i) {
-                    const int rssi = static_cast<int>(packet.RxAtrib.rssi[i]);
-                    meta.rssi[i] = static_cast<int8_t>(rssi > 127 ? -128 : -rssi);
-                    meta.snr[i] = packet.RxAtrib.snr[i];
+                    const int raw_rssi = static_cast<int>(packet.RxAtrib.rssi[i]);
+                    // A path reporting no power is not a measurement; devourer
+                    // skips those in its own quality accounting, so do the same
+                    // rather than recording a fabricated -110 dBm.
+                    if (raw_rssi <= 0) {
+                        continue;
+                    }
+                    int dbm = raw_rssi - 110;
+                    if (dbm > 0) {
+                        dbm = 0;
+                    } else if (dbm < -128) {
+                        dbm = -128;
+                    }
+                    meta.rssi[paths] = static_cast<int8_t>(dbm);
+                    meta.snr[paths] = static_cast<int8_t>(packet.RxAtrib.snr[i] / 2);
+                    ++paths;
                 }
+                meta.paths = paths;
                 meta.mcs_index = static_cast<uint8_t>(packet.RxAtrib.data_rate);
                 meta.bandwidth = packet.RxAtrib.bw;
                 on_frame_(packet.Data.data(), packet.Data.size(), meta);
