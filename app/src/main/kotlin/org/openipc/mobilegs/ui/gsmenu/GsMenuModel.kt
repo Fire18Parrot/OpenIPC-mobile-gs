@@ -205,31 +205,66 @@ object GsMenu {
                             GsMenuValue.Number(1, 65_535),
                             "Where the air unit's own network sends RTP.",
                         ),
-                        GsMenuItem("gs app osd", "Show OSD", GsMenuValue.Toggle),
-
-                        // The corner strip. Goggles put their own numbers in the
-                        // bottom right and let the pilot choose which; these are
-                        // ours, and each is off-able for the same reason.
+                        GsMenuItem(
+                            "gs app osd", "Show air unit OSD",
+                            GsMenuValue.Toggle,
+                            "The camera's own msposd overlay.",
+                        ),
+                        GsMenuItem(
+                            "gs app top_osd", "Link metrics box",
+                            GsMenuValue.Toggle,
+                            "The osd.json panel at the top right.",
+                        ),
                         GsMenuItem(
                             "gs app no_signal", "No-signal background",
                             GsMenuValue.Choice(listOf("drift", "black", "grey")),
                             "Drift moves a soft gradient so an OLED cannot stain.",
                         ),
+
+                        // The corner strip. Goggles put their own numbers in the
+                        // bottom right and let the pilot choose which; these are
+                        // ours, and each is off-able for the same reason.
                         GsMenuItem(
-                            "gs app strip_flight_time", "Show flight time",
+                            "gs app strip_flight_time", "Strip: flight time",
                             GsMenuValue.Toggle,
                             "Time since the link came up.",
                         ),
                         GsMenuItem(
-                            "gs app strip_craft_battery", "Show craft battery",
+                            "gs app strip_craft_battery", "Strip: craft battery",
                             GsMenuValue.Toggle,
-                            "Pack voltage and remaining percent, from MAVLink.",
+                            "Cell gauge, remaining percent and pack voltage.",
                         ),
-                        GsMenuItem("gs app strip_signal", "Show signal", GsMenuValue.Toggle),
-                        GsMenuItem("gs app strip_bitrate", "Show bitrate", GsMenuValue.Toggle),
-                        GsMenuItem("gs app strip_fps", "Show frame rate", GsMenuValue.Toggle),
                         GsMenuItem(
-                            "gs app strip_phone_battery", "Show phone battery",
+                            "gs app strip_signal", "Strip: signal",
+                            GsMenuValue.Toggle,
+                            "Five bars banded as the metrics box bands them.",
+                        ),
+                        GsMenuItem(
+                            "gs app strip_link_bar", "Strip: link quality",
+                            GsMenuValue.Toggle,
+                            "Clean, FEC-recovered and lost packets as one bar.",
+                        ),
+                        GsMenuItem(
+                            "gs app strip_bitrate", "Strip: bitrate",
+                            GsMenuValue.Toggle,
+                            "With a trace of the last few seconds.",
+                        ),
+                        GsMenuItem(
+                            "gs app strip_altitude", "Strip: altitude",
+                            GsMenuValue.Toggle,
+                            "Height above the launch point, from MAVLink.",
+                        ),
+                        GsMenuItem(
+                            "gs app strip_speed", "Strip: ground speed",
+                            GsMenuValue.Toggle,
+                        ),
+                        GsMenuItem("gs app strip_fps", "Strip: frame rate", GsMenuValue.Toggle),
+                        GsMenuItem(
+                            "gs app strip_phone_battery", "Strip: phone battery",
+                            GsMenuValue.Toggle,
+                        ),
+                        GsMenuItem(
+                            "gs app strip_recording", "Strip: recording light",
                             GsMenuValue.Toggle,
                         ),
 

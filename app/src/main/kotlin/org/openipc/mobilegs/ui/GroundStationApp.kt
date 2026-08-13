@@ -235,17 +235,22 @@ private fun FlightScreen(
         }
 
         // Upstream places the metrics box at the top right (x = -270 in
-        // osd.json), so it goes there.
-        InGoggleOsd(
-            stats = stats,
-            // Show what is on the wire, not what was asked for: "auto" tells
-            // a pilot nothing, and the difference is what a black screen means.
-            codec = stats.detectedCodec.takeIf { it != VideoCodec.AUTO }
-                ?.name?.lowercase() ?: "no video",
-            fps = fps,
-            recording = service.isRecording,
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-        )
+        // osd.json), so it goes there. Switchable off: with the strip carrying
+        // the link state, some pilots would rather have the top of the picture
+        // clear for the air unit's own OSD.
+        if (settings.topOsdEnabled) {
+            InGoggleOsd(
+                stats = stats,
+                // Show what is on the wire, not what was asked for: "auto"
+                // tells a pilot nothing, and the difference is what a black
+                // screen means.
+                codec = stats.detectedCodec.takeIf { it != VideoCodec.AUTO }
+                    ?.name?.lowercase() ?: "no video",
+                fps = fps,
+                recording = service.isRecording,
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+            )
+        }
 
         // Bottom right, where the goggles put their numbers. Which of them
         // appear is set per element in the menu, under Camera.
@@ -255,6 +260,7 @@ private fun FlightScreen(
             settings = settings,
             fps = fps,
             flightSeconds = flightSeconds,
+            recording = service.isRecording,
             modifier = Modifier.align(Alignment.BottomEnd),
         )
 

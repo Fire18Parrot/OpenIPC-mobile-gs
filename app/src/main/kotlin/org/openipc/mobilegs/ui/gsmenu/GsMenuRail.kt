@@ -89,13 +89,18 @@ object GsRails {
                 // and cannot burn it in the way a phone's OLED burns - but they
                 // are display settings, so this is where they belong.
                 "gs app osd",
+                "gs app top_osd",
                 "gs app no_signal",
                 "gs app strip_flight_time",
                 "gs app strip_craft_battery",
                 "gs app strip_signal",
+                "gs app strip_link_bar",
                 "gs app strip_bitrate",
+                "gs app strip_altitude",
+                "gs app strip_speed",
                 "gs app strip_fps",
                 "gs app strip_phone_battery",
+                "gs app strip_recording",
             ),
         ),
 

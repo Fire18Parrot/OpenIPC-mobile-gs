@@ -38,13 +38,18 @@ object GsMenuBinding {
         "gs app link_id" -> settings.linkId.toString()
         "gs app udp_port" -> settings.udpVideoPort.toString()
         "gs app osd" -> settings.osdEnabled.onOff()
+        "gs app top_osd" -> settings.topOsdEnabled.onOff()
         "gs app no_signal" -> settings.noSignalStyle
         "gs app strip_flight_time" -> settings.stripFlightTime.onOff()
         "gs app strip_craft_battery" -> settings.stripCraftBattery.onOff()
         "gs app strip_signal" -> settings.stripSignal.onOff()
+        "gs app strip_link_bar" -> settings.stripLinkBar.onOff()
         "gs app strip_bitrate" -> settings.stripBitrate.onOff()
+        "gs app strip_altitude" -> settings.stripAltitude.onOff()
+        "gs app strip_speed" -> settings.stripSpeed.onOff()
         "gs app strip_fps" -> settings.stripFps.onOff()
         "gs app strip_phone_battery" -> settings.stripPhoneBattery.onOff()
+        "gs app strip_recording" -> settings.stripRecording.onOff()
         "gs app mavlink_enabled" -> settings.mavlinkEnabled.onOff()
         "gs app mavlink_kind" -> settings.mavlinkKind.wire()
         "gs app mavlink_host" -> settings.mavlinkHost
@@ -90,13 +95,18 @@ object GsMenuBinding {
         "gs app link_id" -> value.toIntOrNull()?.let { settings.copy(linkId = it) }
         "gs app udp_port" -> value.toIntOrNull()?.let { settings.copy(udpVideoPort = it) }
         "gs app osd" -> settings.copy(osdEnabled = value.isOn())
+        "gs app top_osd" -> settings.copy(topOsdEnabled = value.isOn())
         "gs app no_signal" -> settings.copy(noSignalStyle = value)
         "gs app strip_flight_time" -> settings.copy(stripFlightTime = value.isOn())
         "gs app strip_craft_battery" -> settings.copy(stripCraftBattery = value.isOn())
         "gs app strip_signal" -> settings.copy(stripSignal = value.isOn())
+        "gs app strip_link_bar" -> settings.copy(stripLinkBar = value.isOn())
         "gs app strip_bitrate" -> settings.copy(stripBitrate = value.isOn())
+        "gs app strip_altitude" -> settings.copy(stripAltitude = value.isOn())
+        "gs app strip_speed" -> settings.copy(stripSpeed = value.isOn())
         "gs app strip_fps" -> settings.copy(stripFps = value.isOn())
         "gs app strip_phone_battery" -> settings.copy(stripPhoneBattery = value.isOn())
+        "gs app strip_recording" -> settings.copy(stripRecording = value.isOn())
         "gs app mavlink_enabled" -> settings.copy(mavlinkEnabled = value.isOn())
         "gs app mavlink_kind" -> kindOf(value)?.let { settings.copy(mavlinkKind = it) }
         "gs app mavlink_host" -> settings.copy(mavlinkHost = value)

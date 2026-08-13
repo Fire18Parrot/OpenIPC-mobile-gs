@@ -281,7 +281,10 @@
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     z-index: 2;
   }
+  .strip .el { display: inline-flex; align-items: center; gap: 5px; }
   .strip .dim { color: var(--text-dim); }
+  .strip .val-good { color: var(--on); }
+  .strip svg { display: block; }
   .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
   .bars i { width: 3px; background: rgba(255,255,255,0.22); border-radius: 1px; }
   .bars i.on { background: var(--on); }
@@ -337,11 +340,69 @@
     <div class="osd-row val-bad">● REC</div>
   </div>
 
+  <!-- The corner strip: drawn indicators paired with their numbers. -->
   <div class="strip hidden" id="strip">
-    <span class="dim">04:17</span>
-    <span>22.1V&nbsp; 68%</span>
-    <span>12.5 Mbps</span>
-    <span class="dim">▯ 84%</span>
+    <span class="el">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+        <circle cx="6" cy="6" r="5.3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M6 6V2.9M6 6h2.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      <span class="dim">04:17</span>
+    </span>
+
+    <span class="el val-good">
+      <svg width="26" height="13" viewBox="0 0 26 13" aria-hidden="true">
+        <rect x="0.7" y="0.7" width="22.3" height="11.6" rx="2" fill="none"
+              stroke="currentColor" stroke-width="1.4"/>
+        <rect x="23.6" y="3.9" width="2.4" height="5.2" rx="1" fill="currentColor"/>
+        <rect x="2.8" y="2.8" width="12.9" height="7.4" rx="1" fill="currentColor"/>
+      </svg>
+      <span>68%&nbsp; 22.1V</span>
+    </span>
+
+    <span class="el val-good">
+      <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true">
+        <g fill="currentColor">
+          <rect x="0"    y="9.6"  width="3.2" height="4.4" rx="0.8"/>
+          <rect x="4.0"  y="8.0"  width="3.2" height="6.0" rx="0.8"/>
+          <rect x="8.0"  y="6.4"  width="3.2" height="7.6" rx="0.8"/>
+          <rect x="12.0" y="4.9"  width="3.2" height="9.1" rx="0.8"/>
+        </g>
+        <g fill="rgba(255,255,255,0.2)">
+          <rect x="16.0" y="3.3" width="3.2" height="10.7" rx="0.8"/>
+          <rect x="20.0" y="1.7" width="2.0" height="12.3" rx="0.8"/>
+        </g>
+      </svg>
+      <span>-64dBm</span>
+    </span>
+
+    <span class="el">
+      <svg width="40" height="6" viewBox="0 0 40 6" aria-hidden="true">
+        <rect width="40" height="6" rx="1.5" fill="rgba(255,255,255,0.2)"/>
+        <rect width="33" height="6" rx="1.5" fill="var(--on)"/>
+        <rect x="33" width="5" height="6" fill="#ff9f0a"/>
+        <rect x="38" width="2" height="6" fill="var(--bad)"/>
+      </svg>
+    </span>
+
+    <span class="el">
+      <svg width="46" height="14" viewBox="0 0 46 14" aria-hidden="true">
+        <polyline points="0,9 6,7 12,8 18,4 24,5 30,2 36,4 42,3 46,3"
+                  fill="none" stroke="var(--on)" stroke-width="1.4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>12.5Mbps</span>
+    </span>
+
+    <span class="el">
+      <svg width="26" height="13" viewBox="0 0 26 13" aria-hidden="true">
+        <rect x="0.7" y="0.7" width="22.3" height="11.6" rx="2" fill="none"
+              stroke="currentColor" stroke-width="1.4"/>
+        <rect x="23.6" y="3.9" width="2.4" height="5.2" rx="1" fill="currentColor"/>
+        <rect x="2.8" y="2.8" width="16.0" height="7.4" rx="1" fill="currentColor"/>
+      </svg>
+      <span class="dim">84%</span>
+    </span>
   </div>
 
   <div class="menu" id="menu">
@@ -425,16 +486,25 @@
         { path: 'gs system dvr_mode', label: 'Record With', options: ['raw','reencode','both'], index: 0,
           note: 'Only raw is implemented: the stream has no reliable timestamps.' },
         { path: 'gs system dvr_max_size', label: 'DVR max size', options: ['5','10','20','40'], index: 2, suffix: ' GB' },
-        { path: 'gs app osd', label: 'Show OSD', toggle: true, on: true },
+        { path: 'gs app osd', label: 'Show air unit OSD', toggle: true, on: true,
+          note: 'The camera’s own msposd overlay.' },
+        { path: 'gs app top_osd', label: 'Link metrics box', toggle: true, on: true,
+          note: 'The osd.json panel at the top right.' },
         { path: 'gs app no_signal', label: 'No-signal background', options: ['drift','black','grey'], index: 0,
           note: 'Drift moves a soft gradient so an OLED cannot stain.' },
-        { path: 'gs app strip_flight_time', label: 'Show flight time', toggle: true, on: true },
-        { path: 'gs app strip_craft_battery', label: 'Show craft battery', toggle: true, on: true },
-        { path: 'gs app strip_signal', label: 'Show signal', toggle: true, on: false,
-          note: 'The metrics box in the opposite corner already draws it.' },
-        { path: 'gs app strip_bitrate', label: 'Show bitrate', toggle: true, on: true },
-        { path: 'gs app strip_fps', label: 'Show frame rate', toggle: true, on: false },
-        { path: 'gs app strip_phone_battery', label: 'Show phone battery', toggle: true, on: true },
+        { path: 'gs app strip_flight_time', label: 'Strip: flight time', toggle: true, on: true },
+        { path: 'gs app strip_craft_battery', label: 'Strip: craft battery', toggle: true, on: true,
+          note: 'Cell gauge, remaining percent and pack voltage.' },
+        { path: 'gs app strip_signal', label: 'Strip: signal', toggle: true, on: true },
+        { path: 'gs app strip_link_bar', label: 'Strip: link quality', toggle: true, on: true,
+          note: 'Clean, FEC-recovered and lost packets as one bar.' },
+        { path: 'gs app strip_bitrate', label: 'Strip: bitrate', toggle: true, on: true,
+          note: 'With a trace of the last few seconds.' },
+        { path: 'gs app strip_altitude', label: 'Strip: altitude', toggle: true, on: false },
+        { path: 'gs app strip_speed', label: 'Strip: ground speed', toggle: true, on: false },
+        { path: 'gs app strip_fps', label: 'Strip: frame rate', toggle: true, on: false },
+        { path: 'gs app strip_phone_battery', label: 'Strip: phone battery', toggle: true, on: true },
+        { path: 'gs app strip_recording', label: 'Strip: recording light', toggle: true, on: true },
         { path: 'gs system dvr_reenc_codec', label: 'DVR re-encode codec', value: '—', locked: true },
         { path: 'gs system connector', label: 'Connector', value: 'HDMI', locked: true,
           note: 'SBC-only; the phone renders to its own screen.' },

@@ -33,9 +33,14 @@ five rail entries map almost one-to-one onto sections we already have.
   without opening anything, which is quicker on a two-option row.
 - **Flight view** at the bottom previews the OSD in the same language: the
   ported `osd.json` metrics box at the top right, and the corner strip at the
-  bottom right, where the goggles keep flight time, pack voltage, bitrate and
-  phone battery. Each strip element is its own toggle under Settings > Camera,
-  alongside the no-signal background.
+  bottom right, where the goggles keep their numbers.
+
+  The strip's readings are drawn, not spelled out, wherever a drawing reads
+  faster in flight — a battery cell filled to its charge, six bars on
+  `osd.json`'s own band table, one bar showing clean against FEC-recovered
+  against lost packets, and a trace of throughput over the last few seconds.
+  Each element is its own toggle under Settings > Camera, alongside the
+  no-signal background and a switch for the top-right metrics box.
 
 Rows greyed out are present in the SBC menu but cannot be served by a phone —
 the HDMI connector, DVR re-encoding, the SBC's own Wi-Fi and audio plumbing, and
