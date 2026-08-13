@@ -144,6 +144,8 @@ bool GroundStation::Start(const GsConfig& config, int usb_fd, GroundStationCallb
         return false;
     }
 
+    video_payloads_.store(0, std::memory_order_relaxed);
+    video_bytes_.store(0, std::memory_order_relaxed);
     running_ = true;
     stats_thread_ = std::thread([this] { StatsLoop(); });
     if (callbacks_.on_status) {
@@ -173,6 +175,8 @@ void GroundStation::Stop() {
 }
 
 void GroundStation::OnVideoPayload(const uint8_t* data, size_t size) {
+    video_payloads_.fetch_add(1, std::memory_order_relaxed);
+    video_bytes_.fetch_add(size, std::memory_order_relaxed);
     depacketizer_.Push(data, size);
 }
 
@@ -223,9 +227,12 @@ void GroundStation::StatsLoop() {
     // the first second, and only one of them is the user's problem.
     bool announced_session = false;
     bool warned_about_key = false;
+    bool warned_about_udp = false;
     uint64_t started_ms = NowMs();
     uint64_t decrypt_errors = 0;
     uint64_t frames_seen = 0;
+    uint64_t last_payloads = 0;
+    uint64_t last_bytes = 0;
 
     while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(kStatsIntervalMs));
@@ -239,6 +246,25 @@ void GroundStation::StatsLoop() {
         } else {
             snapshot.timestamp_ms = NowMs();
         }
+
+        // APFPV has no receiver to take a snapshot from, so the counters that
+        // do exist there are filled in by hand. Only the ones that are really
+        // being measured: datagrams and bytes over the interval, and a session
+        // that counts as established once anything has arrived - which is what
+        // "the transport is up" means when there is no session key to accept.
+        // RSSI, FEC and antenna counts stay at their defaults and are hidden by
+        // the UI, because inventing them would be worse than omitting them.
+        if (config_.source == SourceKind::kUdp) {
+            const uint64_t payloads = video_payloads_.load(std::memory_order_relaxed);
+            const uint64_t bytes = video_bytes_.load(std::memory_order_relaxed);
+            snapshot.packets_all = static_cast<uint32_t>(payloads - last_payloads);
+            snapshot.packets_data = snapshot.packets_all;
+            snapshot.bytes_all = static_cast<uint32_t>(bytes - last_bytes);
+            snapshot.session_established = payloads > 0;
+            last_payloads = payloads;
+            last_bytes = bytes;
+        }
+
         stats_.Publish(snapshot);
 
         frames_seen += snapshot.packets_all;
@@ -266,12 +292,32 @@ void GroundStation::StatsLoop() {
 
         // Frames on the right channel_id but none at all decoding is different
         // from no frames: it means the radio is fine and the link_id matches.
-        if (!announced_session && frames_seen == 0 && NowMs() - started_ms > 5000 &&
-            !warned_about_key) {
+        //
+        // Only meaningful with a radio attached. APFPV has no wfb layer, so its
+        // snapshot is empty by construction and every wfb diagnostic above
+        // would fire on a link that is working perfectly - which is worse than
+        // saying nothing, because it sends the user to check a channel and a
+        // link_id that are not in use.
+        if (config_.source == SourceKind::kDevourer && !announced_session &&
+            frames_seen == 0 && NowMs() - started_ms > 5000 && !warned_about_key) {
             warned_about_key = true;
             if (callbacks_.on_status) {
                 callbacks_.on_status(
                     "no wfb frames on this channel - check the channel and link_id");
+            }
+        }
+
+        // The APFPV equivalent: the socket is open but nothing is arriving on
+        // it, which almost always means the phone is not on the air unit's
+        // network - or has quietly moved back to one with internet.
+        if (config_.source == SourceKind::kUdp && !warned_about_udp &&
+            video_payloads_.load(std::memory_order_relaxed) == 0 &&
+            NowMs() - started_ms > 5000) {
+            warned_about_udp = true;
+            if (callbacks_.on_status) {
+                callbacks_.on_status("no video on UDP port " +
+                                     std::to_string(config_.udp.video_port) +
+                                     " - check the phone is on the air unit's network");
             }
         }
 

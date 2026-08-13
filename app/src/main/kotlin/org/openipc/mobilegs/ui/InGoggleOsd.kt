@@ -63,6 +63,13 @@ fun InGoggleOsd(
     fps: Int,
     recording: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * False in APFPV, where there is no wfb layer to report on. Every radio
+     * row below is fed from the wfb receiver's snapshot, and APFPV never
+     * creates one - so drawing them there would sit a permanent NO SIGNAL and
+     * a -105 dBm over video that is arriving perfectly well.
+     */
+    radioLink: Boolean = true,
 ) {
     // "Metrics background": upstream is a 270x130 box at the top right, black
     // at 40% alpha.
@@ -77,7 +84,7 @@ fun InGoggleOsd(
 
         Column(Modifier.padding(8.dp)) {
 
-            if (!stats.isLive) {
+            if (radioLink && !stats.isLive) {
                 // "No signal icon".
                 Text(
                     text = "NO SIGNAL",
@@ -87,20 +94,29 @@ fun InGoggleOsd(
                 )
             }
 
-            // Per-antenna RSSI, one icon each, as upstream lays out up to six.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (stats.antennas == 0) {
-                    SignalBars(bars = 0)
-                } else {
-                    repeat(minOf(stats.antennas, MAX_BARS)) {
-                        SignalBars(bars = barsForRssi(stats.bestRssi))
-                        Spacer(Modifier.width(4.dp))
+            if (radioLink) {
+                // Per-antenna RSSI, one icon each, as upstream lays out up to six.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (stats.antennas == 0) {
+                        SignalBars(bars = 0)
+                    } else {
+                        repeat(minOf(stats.antennas, MAX_BARS)) {
+                            SignalBars(bars = barsForRssi(stats.bestRssi))
+                            Spacer(Modifier.width(4.dp))
+                        }
                     }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "${stats.bestRssi}dBm ${stats.bestSnr}dB",
+                        color = Color.White,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                    )
                 }
-                Spacer(Modifier.width(6.dp))
+            } else {
                 Text(
-                    text = "${stats.bestRssi}dBm ${stats.bestSnr}dB",
-                    color = Color.White,
+                    text = "APFPV",
+                    color = Color(0xFF90A4AE),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                 )

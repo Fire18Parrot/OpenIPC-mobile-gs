@@ -99,6 +99,12 @@ private:
     // phone the way the SBC pushes it to 127.0.0.1:5600.
     int mirror_fd_ = -1;
 
+    // Video payloads handed to the depacketiser, whatever the source. The only
+    // counter APFPV has: it runs no wfb receiver, so the link snapshot stays
+    // empty and cannot say whether anything is arriving.
+    std::atomic<uint64_t> video_payloads_{0};
+    std::atomic<uint64_t> video_bytes_{0};
+
     std::thread stats_thread_;
     std::atomic<bool> running_{false};
 

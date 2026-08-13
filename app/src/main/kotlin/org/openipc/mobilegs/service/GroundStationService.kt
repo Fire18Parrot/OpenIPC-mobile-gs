@@ -28,6 +28,7 @@ import org.openipc.mobilegs.MainActivity
 import org.openipc.mobilegs.R
 import org.openipc.mobilegs.diag.DiagnosticsLog
 import org.openipc.mobilegs.dvr.VideoRecorder
+import org.openipc.mobilegs.net.WifiLink
 import org.openipc.mobilegs.settings.Settings
 import org.openipc.mobilegs.video.VideoDecoder
 
@@ -50,6 +51,7 @@ class GroundStationService : Service(), GroundStationListener {
     private var station: NativeGroundStation? = null
     private val decoder = VideoDecoder()
     private val recorder = VideoRecorder()
+    private val wifiLink by lazy { WifiLink(this) }
     private var wakeLock: PowerManager.WakeLock? = null
     private var surface: Surface? = null
     private var pendingCodec: VideoCodec = VideoCodec.AUTO
@@ -80,6 +82,22 @@ class GroundStationService : Service(), GroundStationListener {
     /** Decoded frames per second, for the OSD's video widget. */
     private val _videoFps = MutableStateFlow(0)
     val videoFps: StateFlow<Int> = _videoFps
+
+    /**
+     * Whether there is actually a picture on the surface.
+     *
+     * Taken from the decoder's own frame count rather than from link state,
+     * because link state does not mean the same thing in both modes: APFPV has
+     * no wfb receiver at all, so its session is never "established" and its
+     * packet counters never move, however well the video is arriving. The one
+     * question the flight view needs answered - is anything being drawn - is
+     * the one the decoder can answer in either mode.
+     */
+    private val _hasPicture = MutableStateFlow(false)
+    val hasPicture: StateFlow<Boolean> = _hasPicture
+
+    private var lastDecodedAtMs = 0L
+    private var lastDecodedCount = 0L
 
     /**
      * When the link first came up, as an uptime clock, or 0 while it is down.
@@ -156,6 +174,14 @@ class GroundStationService : Service(), GroundStationListener {
     fun startGroundStation(settings: Settings, usbFd: Int, keyPath: String): Boolean {
         if (_running.value) return true
 
+        // APFPV rides the air unit's own access point, which has no internet
+        // behind it. Android will happily leave the default route on mobile
+        // data, and our socket then listens on an interface the drone cannot
+        // reach - so claim the Wi-Fi before opening anything.
+        if (settings.source == SourceKind.UDP) {
+            wifiLink.bind { message -> onStatus(message) }
+        }
+
         val instance = NativeGroundStation()
         station = instance
 
@@ -174,6 +200,7 @@ class GroundStationService : Service(), GroundStationListener {
             _status.value = instance.lastError.ifEmpty { "could not start the ground station" }
             instance.close()
             station = null
+            wifiLink.release()
             return false
         }
 
@@ -198,6 +225,15 @@ class GroundStationService : Service(), GroundStationListener {
         station = null
         _running.value = false
         _linkUpSinceMs.value = 0L
+        _hasPicture.value = false
+        _videoFps.value = 0
+        lastDecodedCount = 0
+        lastDecodedAtMs = 0
+        lastFrameCount = 0
+        lastFpsAtMs = 0
+        // Process-wide, so it must not outlive the link: a GCS endpoint on the
+        // ordinary network would be unreachable while it is held.
+        wifiLink.release()
         releaseWakeLock()
         if (isForeground) {
             @Suppress("DEPRECATION")
@@ -273,13 +309,26 @@ class GroundStationService : Service(), GroundStationListener {
         // Stats arrive every 100 ms; frames are counted over a whole second so
         // the number on screen is steady enough to read in flight.
         val now = System.currentTimeMillis()
+        val decoded = decoder.decodedFrames
+
+        // Whether a picture exists, at the 100 ms stats cadence rather than the
+        // one-second fps cadence, so the no-signal fill lifts as soon as the
+        // first frame lands instead of up to a second later. Dropping it takes
+        // a moment's grace: a single late frame is not a lost link.
+        if (decoded != lastDecodedCount) {
+            lastDecodedCount = decoded
+            lastDecodedAtMs = now
+            _hasPicture.value = true
+        } else if (_hasPicture.value && now - lastDecodedAtMs > PICTURE_GRACE_MS) {
+            _hasPicture.value = false
+        }
+
         if (lastFpsAtMs == 0L) {
             lastFpsAtMs = now
-            lastFrameCount = decoder.decodedFrames
+            lastFrameCount = decoded
         } else if (now - lastFpsAtMs >= 1000) {
-            val frames = decoder.decodedFrames
-            _videoFps.value = (frames - lastFrameCount).toInt()
-            lastFrameCount = frames
+            _videoFps.value = (decoded - lastFrameCount).toInt()
+            lastFrameCount = decoded
             lastFpsAtMs = now
         }
     }
@@ -350,6 +399,9 @@ class GroundStationService : Service(), GroundStationListener {
         private const val TAG = "openipc-service"
         private const val CHANNEL_ID = "ground_station"
         private const val NOTIFICATION_ID = 1
+
+        /** How long the picture may stall before the no-signal fill returns. */
+        private const val PICTURE_GRACE_MS = 1500L
 
         /**
          * Start the service so it outlives the activity that bound it. Plain

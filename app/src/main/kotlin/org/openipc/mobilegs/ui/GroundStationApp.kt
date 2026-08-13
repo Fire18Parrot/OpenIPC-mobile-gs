@@ -169,20 +169,11 @@ private fun FlightScreen(
         }
     }
 
-    // Whether to cover the screen with the no-signal fill. Held off for a
-    // moment after the link drops, because packetsAll is a per-interval count
-    // and a lossy link can read zero for one interval while the picture is
-    // still perfectly good - flashing a background over live video would be
-    // worse than the gap it papers over.
-    var noPicture by remember { mutableStateOf(true) }
-    LaunchedEffect(stats.isLive) {
-        if (stats.isLive) {
-            noPicture = false
-        } else {
-            delay(1500)
-            noPicture = true
-        }
-    }
+    // Whether anything is being drawn, decided by the decoder rather than by
+    // link state. Link state answers a different question, and in APFPV it
+    // answers nothing at all: that mode has no wfb receiver, so its session is
+    // never established and its counters never move however good the video is.
+    val hasPicture by service.hasPicture.collectAsState()
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // A SurfaceView, not a TextureView: it hands MediaCodec a buffer queue
@@ -226,7 +217,7 @@ private fun FlightScreen(
         // it is invisible. A ground station spends most of its life on this
         // screen, and an OLED panel keeps whatever sits still on it - hence the
         // moving default. Removed the instant video returns.
-        if (noPicture) {
+        if (!hasPicture) {
             NoSignalBackground(settings.noSignalStyle, Modifier.fillMaxSize())
         }
 
@@ -249,6 +240,7 @@ private fun FlightScreen(
                 fps = fps,
                 recording = service.isRecording,
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                radioLink = settings.source != SourceKind.UDP,
             )
         }
 

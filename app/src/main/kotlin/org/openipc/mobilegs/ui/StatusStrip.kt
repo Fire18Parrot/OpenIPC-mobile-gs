@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.openipc.gslib.LinkStats
+import org.openipc.gslib.SourceKind
 import org.openipc.gslib.Telemetry
 import org.openipc.mobilegs.settings.Settings
 
@@ -138,7 +139,12 @@ fun StatusStrip(
             }
         }
 
-        if (settings.stripSignal) {
+        // Signal and packet accounting are wfb concepts. APFPV rides the air
+        // unit's own network and never fills them in, so drawing them there
+        // would mean a permanently empty gauge next to working video.
+        val radioLink = settings.source != SourceKind.UDP
+
+        if (settings.stripSignal && radioLink) {
             // Coloured off the bar count rather than a second dBm threshold, so
             // the colour can never disagree with the bars beside it.
             val bars = barsFor(stats)
@@ -153,7 +159,7 @@ fun StatusStrip(
             }
         }
 
-        if (settings.stripLinkBar) {
+        if (settings.stripLinkBar && radioLink) {
             Element { LinkQualityBar(stats) }
         }
 
